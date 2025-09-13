@@ -276,8 +276,7 @@ async def submit_run(
         # create run in database
         run_id = await run_manager.create_run(
             input_hash=input_hash,
-            options=options,
-            schema_version=schema_version
+            options=options
         )
 
         # get queue position (approximate)

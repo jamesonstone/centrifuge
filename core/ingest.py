@@ -327,7 +327,7 @@ class CSVIngester:
             uuid_hex = row_hash[:32]
             formatted_uuid = f"{uuid_hex[:8]}-{uuid_hex[8:12]}-{uuid_hex[12:16]}-{uuid_hex[16:20]}-{uuid_hex[20:32]}"
             return formatted_uuid
-        
+
         df['row_uuid'] = df.apply(generate_row_uuid, axis=1)
 
         # Add original row number (1-indexed for user reference)
@@ -698,3 +698,23 @@ class DataIngestor:
     def get_experimental_config(self) -> Dict[str, Any]:
         """Get current experimental configuration."""
         return self.experimental.get_configuration()
+
+    def ingest(self, file_path: str, schema_version: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Ingest file with backwards compatibility (wrapper for ingest_csv).
+
+        Args:
+            file_path: Path to CSV file
+            schema_version: Optional schema version (ignored for now)
+
+        Returns:
+            Dictionary with data and metadata for pipeline compatibility
+        """
+        df, file_hash, header_mapping = self.ingest_csv(file_path)
+
+        return {
+            'data': df,
+            'file_hash': file_hash,
+            'header_mapping': header_mapping,
+            'validation_errors': []
+        }

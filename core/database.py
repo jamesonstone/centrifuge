@@ -201,30 +201,27 @@ class RunManager:
 
     async def create_run(self,
                         input_hash: str,
-                        options: Dict[str, Any],
-                        schema_version: str = "v1") -> str:
+                        options: Dict[str, Any]) -> str:
         """
         Create a new run in queued state.
 
         Args:
             input_hash: SHA256 hash of input file
             options: Run options
-            schema_version: Schema version
 
         Returns:
             Run ID
         """
         query = """
-            INSERT INTO runs (input_hash, options, schema_version, status)
-            VALUES ($1, $2, $3, 'queued')
+            INSERT INTO runs (input_file_hash, options, status)
+            VALUES ($1, $2, 'queued')
             RETURNING id::text
         """
 
         run_id = await self.db.fetchval(
             query,
             input_hash,
-            json.dumps(options),
-            schema_version
+            json.dumps(options)
         )
 
         logger.info(f"Created run {run_id} in queued state")
@@ -244,7 +241,7 @@ class RunManager:
         query = """
             UPDATE runs
             SET status = 'running',
-                claimed_by = $1,
+                worker_id = $1,
                 started_at = NOW(),
                 heartbeat_at = NOW()
             WHERE id = (
@@ -257,7 +254,7 @@ class RunManager:
                 FOR UPDATE SKIP LOCKED
                 LIMIT 1
             )
-            RETURNING id::text, input_hash, options, schema_version
+            RETURNING id::text, input_file_hash, options
         """
 
         row = await self.db.fetchrow(query % visibility_timeout, worker_id)
@@ -265,9 +262,8 @@ class RunManager:
         if row:
             return {
                 'run_id': row['id'],
-                'input_hash': row['input_hash'],
-                'options': json.loads(row['options']),
-                'schema_version': row['schema_version']
+                'input_hash': row['input_file_hash'],
+                'options': json.loads(row['options'])
             }
 
         return None
@@ -287,7 +283,7 @@ class RunManager:
             UPDATE runs
             SET heartbeat_at = NOW()
             WHERE id = $1::uuid
-              AND claimed_by = $2
+              AND worker_id = $2
               AND status = 'running'
         """
 
@@ -340,8 +336,6 @@ class RunManager:
             UPDATE runs
             SET status = $2,
                 completed_at = NOW(),
-                error_message = $3,
-                error_code = $4,
                 updated_at = NOW()
             WHERE id = $1::uuid
         """
@@ -349,9 +343,7 @@ class RunManager:
         await self.db.execute(
             query,
             run_id,
-            state,
-            error_message,
-            error_code
+            state
         )
 
         logger.info(f"Run {run_id} completed with state {state}")
@@ -368,7 +360,7 @@ class RunManager:
         """
         query = """
             SELECT id::text, status, phase_progress,
-                   error_message, error_code, created_at, completed_at
+                   created_at, completed_at
             FROM runs
             WHERE id = $1::uuid
         """
@@ -381,8 +373,8 @@ class RunManager:
                 'state': row['status'],
                 'phase_progress': json.loads(row['phase_progress']) if row['phase_progress'] else {},
                 'metrics': {},  # TODO: fetch from metrics table if needed
-                'error_message': row['error_message'],
-                'error_code': row['error_code'],
+                'error_message': None,  # TODO: extract from error_breakdown if needed
+                'error_code': None,  # TODO: extract from error_breakdown if needed
                 'created_at': row['created_at'].isoformat() if row['created_at'] else None,
                 'completed_at': row['completed_at'].isoformat() if row['completed_at'] else None
             }

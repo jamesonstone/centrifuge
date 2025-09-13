@@ -467,8 +467,8 @@ class ArtifactManager:
         # Store to MinIO if client available
         if self.minio_client:
             try:
-                # Content-addressed path
-                object_path = f"artifacts/{content_hash}/{artifact_name}"
+                # Run-based path for easy lookup
+                object_path = f"artifacts/{self.run_id}/{artifact_name}"
 
                 # Upload to MinIO
                 from io import BytesIO

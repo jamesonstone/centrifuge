@@ -43,12 +43,10 @@ services:
   # HTTP API (stateless). Creates runs, exposes status/artifacts. No long work.
   # Same codebase as workers; different entrypoint.
   centrifuge-app:
-    image: python:3.13-slim
+    build: .
     container_name: centrifuge-app
     working_dir: /srv/centrifuge
-    command: >
-      sh -c "pip install -r requirements.txt &&
-             uvicorn api.main:app --host 0.0.0.0 --port 8080 --workers 2"
+    command: uv run uvicorn api.main:app --host 0.0.0.0 --port 8080 --workers 2
     ports:
       - "8080:8080"
     env_file:
@@ -81,12 +79,10 @@ services:
   # Workers: each claims one run and executes end-to-end (ingest → validate → rules → LLM → artifacts).
   # Start with 2 to demonstrate concurrency; scale to N by adding more worker services.
   centrifuge-worker-1:
-    image: python:3.13-slim
+    build: .
     container_name: centrifuge-worker-1
     working_dir: /srv/centrifuge
-    command: >
-      sh -c "pip install -r requirements.txt &&
-             python worker/main.py"
+    command: uv run python worker/main.py
     env_file:
       - .env
     environment:
@@ -113,12 +109,10 @@ services:
       - ./:/srv/centrifuge:rw
 
   centrifuge-worker-2:
-    image: python:3.13-slim
+    build: .
     container_name: centrifuge-worker-2
     working_dir: /srv/centrifuge
-    command: >
-      sh -c "pip install -r requirements.txt &&
-             python worker/main.py"
+    command: uv run python worker/main.py
     env_file:
       - .env
     environment:
