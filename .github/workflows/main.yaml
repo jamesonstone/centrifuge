@@ -1,0 +1,22 @@
+env:
+  PROJECT_NAME: "centrifuge"
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+      - name: Get Latest Container Version
+        id: get_version
+        run: echo "version=$(echo ${{ github.sha }} | cut -c1-7)"  >> $GITHUB_OUTPUT
+# TODO: Add build, test, push steps
