@@ -134,9 +134,11 @@ infra-logs:
 
 api-start:
 	@echo "🌐 Starting API service (dev mode)..."
+	@if [ -f .env ]; then set -a && source .env && set +a; fi && \
 	POSTGRES_HOST=localhost POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres POSTGRES_DB=centrifuge \
 	ARTIFACT_ENDPOINT=http://localhost:9000 ARTIFACT_ACCESS_KEY=minioadmin ARTIFACT_SECRET_KEY=minioadmin \
-	LLM_BASE_URL=http://localhost:4000 \
+	MINIO_ENDPOINT=localhost:9000 \
+	OPENAI_API_KEY="$${OPENAI_API_KEY}" \
 	USE_LOCAL_STORAGE=false uv run python api/main.py
 
 api-start-prod:
@@ -153,9 +155,11 @@ api-logs:
 
 worker-start:
 	@echo "⚙️  Starting worker..."
+	@if [ -f .env ]; then set -a && source .env && set +a; fi && \
 	POSTGRES_HOST=localhost POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres POSTGRES_DB=centrifuge \
 	ARTIFACT_ENDPOINT=http://localhost:9000 ARTIFACT_ACCESS_KEY=minioadmin ARTIFACT_SECRET_KEY=minioadmin \
-	LLM_BASE_URL=http://localhost:4000 \
+	MINIO_ENDPOINT=localhost:9000 \
+	OPENAI_API_KEY="$${OPENAI_API_KEY}" \
 	USE_LOCAL_STORAGE=false uv run python worker/main.py
 
 worker-scale:

@@ -25,10 +25,11 @@ class Settings(BaseSettings):
     artifact_secret_key: str = "minioadmin"
     artifact_region: str = "us-east-1"
 
-    # LLM Configuration
-    llm_base_url: str = "http://localhost:4000"
+    # LLM Configuration (Direct Library Mode)
+    # Note: llm_base_url and llm_provider kept for backward compatibility but unused in direct mode
+    llm_base_url: str = "http://localhost:4000"  # Deprecated - for proxy mode only
     llm_model_id: str = "openai/gpt-5"
-    llm_provider: str = "litellm"
+    llm_provider: str = "direct"  # Changed from "litellm" to indicate direct library usage
     llm_temperature: float = 0.0
     llm_seed: int = 42
     openai_api_key: Optional[str] = None

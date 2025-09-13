@@ -88,35 +88,35 @@ async def lifespan(app: FastAPI):
     Initialize resources on startup, cleanup on shutdown.
     """
     global db_pool, storage, run_manager, artifact_store
-    
+
     logger.info("Starting Centrifuge API")
-    
+
     try:
         # initialize database
         db_pool = await get_database()
         run_manager = RunManager(db_pool)
         artifact_store = ArtifactStore(db_pool)
-        
+
         # initialize storage
         storage = await get_storage_backend()
-        
+
         logger.info("API resources initialized")
-        
+
     except Exception as e:
         logger.error(f"Failed to initialize API: {e}")
         raise
-    
+
     yield
-    
+
     # cleanup on shutdown
     logger.info("Shutting down Centrifuge API")
-    
+
     if storage:
         await close_storage()
-    
+
     if db_pool:
         await close_database()
-    
+
     logger.info("API shutdown complete")
 
 
@@ -135,7 +135,7 @@ app = FastAPI(
 async def health_check():
     """
     Health check endpoint.
-    
+
     Checks database and storage connectivity.
     """
     health = {
@@ -144,7 +144,7 @@ async def health_check():
         "storage": "unknown",
         "timestamp": datetime.utcnow().isoformat()
     }
-    
+
     # check database
     try:
         if db_pool and db_pool.is_healthy:
@@ -160,7 +160,7 @@ async def health_check():
         logger.error(f"Database health check failed: {e}")
         health["database"] = "error"
         health["status"] = "unhealthy"
-    
+
     # check storage
     try:
         if storage:
@@ -175,11 +175,11 @@ async def health_check():
         health["storage"] = "error"
         if health["status"] == "healthy":
             health["status"] = "degraded"
-    
+
     # return appropriate status code
     if health["status"] == "unhealthy":
         raise HTTPException(status_code=503, detail=health)
-    
+
     return health
 
 
@@ -194,33 +194,33 @@ async def submit_run(
 ):
     """
     Submit a new data cleaning run.
-    
+
     Accepts either:
     - Multipart file upload
     - S3 URL reference
-    
+
     The run is queued for asynchronous processing by workers.
     """
     logger.info(f"Received run submission (file={file is not None}, s3_url={s3_url is not None})")
-    
+
     # validate input
     if not file and not s3_url:
         raise HTTPException(
             status_code=400,
             detail="Either file upload or s3_url is required"
         )
-    
+
     if file and s3_url:
         raise HTTPException(
             status_code=400,
             detail="Provide either file upload or s3_url, not both"
         )
-    
+
     # process LLM columns
     llm_column_list = []
     if llm_columns:
         llm_column_list = [col.strip() for col in llm_columns.split(",")]
-    
+
     # prepare options
     options = {
         "schema_version": schema_version,
@@ -228,39 +228,39 @@ async def submit_run(
         "dry_run": dry_run,
         "llm_columns": llm_column_list
     }
-    
+
     try:
         # handle file upload
         if file:
             # read and validate file
             content = await file.read()
-            
+
             # check size limit (50MB)
             if len(content) > 50 * 1024 * 1024:
                 raise HTTPException(
                     status_code=413,
                     detail="File size exceeds 50MB limit"
                 )
-            
+
             # calculate hash
             input_hash = hashlib.sha256(content).hexdigest()
-            
+
             # upload to storage
             storage_path = f"inputs/{input_hash[:2]}/{input_hash}/input.csv"
             temp_path = f"/tmp/upload_{input_hash}.csv"
-            
+
             # save temporarily
             with open(temp_path, "wb") as f:
                 f.write(content)
-            
+
             # upload to storage
             await storage.upload(temp_path, storage_path)
-            
+
             # cleanup temp file
             os.remove(temp_path)
-            
+
             logger.info(f"Uploaded file to {storage_path}")
-            
+
         else:
             # handle S3 URL
             if not s3_url.startswith("s3://"):
@@ -268,30 +268,30 @@ async def submit_run(
                     status_code=400,
                     detail="S3 URL must start with s3://"
                 )
-            
+
             # for S3 URL, use URL hash as input hash
             input_hash = hashlib.sha256(s3_url.encode()).hexdigest()
             options["s3_url"] = s3_url
-        
+
         # create run in database
         run_id = await run_manager.create_run(
             input_hash=input_hash,
             options=options,
             schema_version=schema_version
         )
-        
+
         # get queue position (approximate)
         queue_position = await _get_queue_position(run_id)
-        
+
         logger.info(f"Created run {run_id} with input hash {input_hash}")
-        
+
         return RunSubmitResponse(
             run_id=run_id,
             status="queued",
             message="Run queued for processing",
             queue_position=queue_position
         )
-        
+
     except Exception as e:
         logger.error(f"Failed to submit run: {e}")
         raise HTTPException(
@@ -304,7 +304,7 @@ async def submit_run(
 async def get_run_status(run_id: str):
     """
     Get status of a specific run.
-    
+
     Returns current state, progress, and metrics.
     """
     try:
@@ -316,16 +316,16 @@ async def get_run_status(run_id: str):
                 status_code=400,
                 detail="Invalid run ID format"
             )
-        
+
         # get run status
         status = await run_manager.get_run_status(run_id)
-        
+
         if not status:
             raise HTTPException(
                 status_code=404,
                 detail="Run not found"
             )
-        
+
         return RunStatusResponse(
             run_id=run_id,
             state=status["state"],
@@ -336,7 +336,7 @@ async def get_run_status(run_id: str):
             created_at=status["created_at"],
             completed_at=status.get("completed_at")
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -351,7 +351,7 @@ async def get_run_status(run_id: str):
 async def list_artifacts(run_id: str):
     """
     List artifacts for a run.
-    
+
     Returns metadata for all generated artifacts.
     """
     try:
@@ -363,7 +363,7 @@ async def list_artifacts(run_id: str):
                 status_code=400,
                 detail="Invalid run ID format"
             )
-        
+
         # check run exists
         status = await run_manager.get_run_status(run_id)
         if not status:
@@ -371,15 +371,15 @@ async def list_artifacts(run_id: str):
                 status_code=404,
                 detail="Run not found"
             )
-        
+
         # get artifacts
         artifacts = await artifact_store.list_artifacts(run_id)
-        
+
         return ArtifactListResponse(
             run_id=run_id,
             artifacts=artifacts
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -397,7 +397,7 @@ async def download_artifact(
 ):
     """
     Download a specific artifact.
-    
+
     Streams the artifact file with appropriate content type.
     """
     try:
@@ -409,7 +409,7 @@ async def download_artifact(
                 status_code=400,
                 detail="Invalid run ID format"
             )
-        
+
         # validate artifact type
         valid_types = ["cleaned", "errors", "audit", "summary", "manifest", "metrics"]
         if artifact_type not in valid_types:
@@ -417,37 +417,37 @@ async def download_artifact(
                 status_code=400,
                 detail=f"Invalid artifact type. Must be one of: {valid_types}"
             )
-        
+
         # get artifacts
         artifacts = await artifact_store.list_artifacts(run_id)
-        
+
         # find requested artifact
         artifact = None
         for a in artifacts:
             if a["type"] == artifact_type:
                 artifact = a
                 break
-        
+
         if not artifact:
             raise HTTPException(
                 status_code=404,
                 detail=f"Artifact '{artifact_type}' not found for run {run_id}"
             )
-        
+
         # download from storage
         temp_path = f"/tmp/download_{run_id}_{artifact_type}"
         await storage.download(artifact["storage_path"], temp_path)
-        
+
         # determine content type
         mime_type = artifact.get("mime_type", "application/octet-stream")
-        
+
         # stream file
         def iterfile():
             with open(temp_path, "rb") as f:
                 yield from f
             # cleanup after streaming
             os.remove(temp_path)
-        
+
         return StreamingResponse(
             iterfile(),
             media_type=mime_type,
@@ -455,7 +455,7 @@ async def download_artifact(
                 "Content-Disposition": f"attachment; filename={artifact['file_name']}"
             }
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -474,7 +474,7 @@ async def list_runs(
 ):
     """
     List recent runs with optional filtering.
-    
+
     Returns a paginated list of runs.
     """
     try:
@@ -485,58 +485,58 @@ async def list_runs(
                 status_code=400,
                 detail=f"Invalid state. Must be one of: {valid_states}"
             )
-        
+
         # build query
         query = """
-            SELECT run_id::text, state, created_at, completed_at,
-                   phase_progress, metrics
+            SELECT id::text, status, created_at, completed_at,
+                   phase_progress
             FROM runs
         """
-        
+
         conditions = []
         params = []
         param_count = 0
-        
+
         if state:
             param_count += 1
-            conditions.append(f"state = ${param_count}")
+            conditions.append(f"status = ${param_count}")
             params.append(state)
-        
+
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
-        
+
         query += " ORDER BY created_at DESC"
-        
+
         param_count += 1
         query += f" LIMIT ${param_count}"
         params.append(limit)
-        
+
         param_count += 1
         query += f" OFFSET ${param_count}"
         params.append(offset)
-        
+
         # execute query
         rows = await db_pool.fetch(query, *params)
-        
+
         # format results
         runs = []
         for row in rows:
             runs.append({
-                "run_id": row["run_id"],
-                "state": row["state"],
+                "run_id": row["id"],
+                "state": row["status"],
                 "created_at": row["created_at"].isoformat() if row["created_at"] else None,
                 "completed_at": row["completed_at"].isoformat() if row["completed_at"] else None,
                 "phase_progress": json.loads(row["phase_progress"]) if row["phase_progress"] else {},
-                "metrics": json.loads(row["metrics"]) if row["metrics"] else {}
+                "metrics": {}  # TODO: join with metrics table if needed
             })
-        
+
         return {
             "runs": runs,
             "limit": limit,
             "offset": offset,
             "total": len(runs)
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -553,15 +553,15 @@ async def _get_queue_position(run_id: str) -> Optional[int]:
         query = """
             SELECT COUNT(*) as position
             FROM runs
-            WHERE state = 'queued'
+            WHERE status = 'queued'
               AND created_at < (
-                  SELECT created_at FROM runs WHERE run_id = $1::uuid
+                  SELECT created_at FROM runs WHERE id = $1::uuid
               )
         """
-        
+
         position = await db_pool.fetchval(query, run_id)
         return position + 1 if position is not None else None
-        
+
     except Exception as e:
         logger.error(f"Failed to get queue position: {e}")
         return None

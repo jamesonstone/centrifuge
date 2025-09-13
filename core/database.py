@@ -30,13 +30,13 @@ class DatabasePool:
     """
     Manages PostgreSQL connection pool with health checks.
     """
-    
+
     def __init__(self):
         self.pool: Optional[Pool] = None
         self.dsn: Optional[str] = None
         self._healthy: bool = False
-        
-    async def initialize(self, 
+
+    async def initialize(self,
                         host: str = None,
                         port: int = None,
                         database: str = None,
@@ -47,7 +47,7 @@ class DatabasePool:
                         timeout: float = 10.0) -> None:
         """
         Initialize the database connection pool.
-        
+
         Args:
             host: Database host (default from env POSTGRES_HOST)
             port: Database port (default from env POSTGRES_PORT or 5432)
@@ -64,9 +64,9 @@ class DatabasePool:
         database = database or os.getenv('POSTGRES_DB', 'centrifuge')
         user = user or os.getenv('POSTGRES_USER', 'centrifuge')
         password = password or os.getenv('POSTGRES_PASSWORD', 'centrifuge')
-        
+
         self.dsn = f"postgresql://{user}:{password}@{host}:{port}/{database}"
-        
+
         try:
             logger.info(f"Initializing database pool to {host}:{port}/{database}")
             self.pool = await asyncpg.create_pool(
@@ -76,16 +76,16 @@ class DatabasePool:
                 timeout=timeout,
                 command_timeout=timeout
             )
-            
+
             # test the connection
             await self.health_check()
             logger.info("Database pool initialized successfully")
-            
+
         except Exception as e:
             self._healthy = False
             logger.error(f"Failed to initialize database pool: {e}")
             raise DatabaseConnectionError(f"Failed to connect to database: {e}")
-    
+
     async def close(self) -> None:
         """Close the database pool."""
         if self.pool:
@@ -93,18 +93,18 @@ class DatabasePool:
             self.pool = None
             self._healthy = False
             logger.info("Database pool closed")
-    
+
     async def health_check(self) -> bool:
         """
         Check database health.
-        
+
         Returns:
             True if healthy, False otherwise
         """
         if not self.pool:
             self._healthy = False
             return False
-            
+
         try:
             async with self.pool.acquire() as conn:
                 result = await conn.fetchval("SELECT 1")
@@ -114,76 +114,76 @@ class DatabasePool:
             logger.error(f"Health check failed: {e}")
             self._healthy = False
             return False
-    
+
     @property
     def is_healthy(self) -> bool:
         """Check if database is healthy."""
         return self._healthy
-    
+
     @asynccontextmanager
     async def acquire(self):
         """
         Acquire a connection from the pool.
-        
+
         Yields:
             Connection object
         """
         if not self.pool:
             raise DatabaseConnectionError("Database pool not initialized")
-        
+
         async with self.pool.acquire() as conn:
             yield conn
-    
+
     async def execute(self, query: str, *args) -> str:
         """
         Execute a query without returning results.
-        
+
         Args:
             query: SQL query
             *args: Query parameters
-            
+
         Returns:
             Status string
         """
         async with self.acquire() as conn:
             return await conn.execute(query, *args)
-    
+
     async def fetchval(self, query: str, *args) -> Any:
         """
         Fetch a single value.
-        
+
         Args:
             query: SQL query
             *args: Query parameters
-            
+
         Returns:
             Single value
         """
         async with self.acquire() as conn:
             return await conn.fetchval(query, *args)
-    
+
     async def fetchrow(self, query: str, *args) -> Optional[asyncpg.Record]:
         """
         Fetch a single row.
-        
+
         Args:
             query: SQL query
             *args: Query parameters
-            
+
         Returns:
             Single row or None
         """
         async with self.acquire() as conn:
             return await conn.fetchrow(query, *args)
-    
+
     async def fetch(self, query: str, *args) -> List[asyncpg.Record]:
         """
         Fetch multiple rows.
-        
+
         Args:
             query: SQL query
             *args: Query parameters
-            
+
         Returns:
             List of rows
         """
@@ -195,113 +195,113 @@ class RunManager:
     """
     Manages run lifecycle in the database.
     """
-    
+
     def __init__(self, db: DatabasePool):
         self.db = db
-    
-    async def create_run(self, 
+
+    async def create_run(self,
                         input_hash: str,
                         options: Dict[str, Any],
                         schema_version: str = "v1") -> str:
         """
         Create a new run in queued state.
-        
+
         Args:
             input_hash: SHA256 hash of input file
             options: Run options
             schema_version: Schema version
-            
+
         Returns:
             Run ID
         """
         query = """
-            INSERT INTO runs (input_hash, options, schema_version, state)
+            INSERT INTO runs (input_hash, options, schema_version, status)
             VALUES ($1, $2, $3, 'queued')
-            RETURNING run_id::text
+            RETURNING id::text
         """
-        
+
         run_id = await self.db.fetchval(
             query,
             input_hash,
             json.dumps(options),
             schema_version
         )
-        
+
         logger.info(f"Created run {run_id} in queued state")
         return run_id
-    
+
     async def claim_run(self, worker_id: str, visibility_timeout: int = 300) -> Optional[Dict[str, Any]]:
         """
         Atomically claim a queued run for processing.
-        
+
         Args:
             worker_id: Worker identifier
             visibility_timeout: Seconds before run can be reclaimed
-            
+
         Returns:
             Run details or None if no runs available
         """
         query = """
             UPDATE runs
-            SET state = 'running',
+            SET status = 'running',
                 claimed_by = $1,
                 started_at = NOW(),
                 heartbeat_at = NOW()
-            WHERE run_id = (
-                SELECT run_id
+            WHERE id = (
+                SELECT id
                 FROM runs
-                WHERE state = 'queued'
-                   OR (state = 'running' 
+                WHERE status = 'queued'
+                   OR (status = 'running'
                        AND heartbeat_at < NOW() - INTERVAL '%s seconds')
                 ORDER BY created_at
                 FOR UPDATE SKIP LOCKED
                 LIMIT 1
             )
-            RETURNING run_id::text, input_hash, options, schema_version
+            RETURNING id::text, input_hash, options, schema_version
         """
-        
+
         row = await self.db.fetchrow(query % visibility_timeout, worker_id)
-        
+
         if row:
             return {
-                'run_id': row['run_id'],
+                'run_id': row['id'],
                 'input_hash': row['input_hash'],
                 'options': json.loads(row['options']),
                 'schema_version': row['schema_version']
             }
-        
+
         return None
-    
+
     async def update_heartbeat(self, run_id: str, worker_id: str) -> bool:
         """
         Update run heartbeat.
-        
+
         Args:
             run_id: Run ID
             worker_id: Worker identifier
-            
+
         Returns:
             True if updated, False if not found or not owned by worker
         """
         query = """
             UPDATE runs
             SET heartbeat_at = NOW()
-            WHERE run_id = $1::uuid 
+            WHERE id = $1::uuid
               AND claimed_by = $2
-              AND state = 'running'
+              AND status = 'running'
         """
-        
+
         result = await self.db.execute(query, run_id, worker_id)
         return "UPDATE 1" in result
-    
-    async def update_progress(self, 
+
+    async def update_progress(self,
                             run_id: str,
                             phase: str,
                             percent: int,
                             metrics: Optional[Dict[str, Any]] = None) -> None:
         """
         Update run progress.
-        
+
         Args:
             run_id: Run ID
             phase: Current phase name
@@ -309,30 +309,17 @@ class RunManager:
             metrics: Optional metrics to update
         """
         phase_progress = {'phase': phase, 'percent': percent}
-        
-        if metrics:
-            query = """
-                UPDATE runs
-                SET phase_progress = $2,
-                    metrics = $3,
-                    updated_at = NOW()
-                WHERE run_id = $1::uuid
-            """
-            await self.db.execute(
-                query,
-                run_id,
-                json.dumps(phase_progress),
-                json.dumps(metrics)
-            )
-        else:
-            query = """
-                UPDATE runs
-                SET phase_progress = $2,
-                    updated_at = NOW()
-                WHERE run_id = $1::uuid
-            """
-            await self.db.execute(query, run_id, json.dumps(phase_progress))
-    
+
+        # For now, ignore metrics parameter since metrics are stored in separate table
+        # TODO: Store metrics in metrics table if provided
+        query = """
+            UPDATE runs
+            SET phase_progress = $2,
+                updated_at = NOW()
+            WHERE id = $1::uuid
+        """
+        await self.db.execute(query, run_id, json.dumps(phase_progress))
+
     async def complete_run(self,
                           run_id: str,
                           state: str,
@@ -341,7 +328,7 @@ class RunManager:
                           error_code: Optional[str] = None) -> None:
         """
         Mark run as completed.
-        
+
         Args:
             run_id: Run ID
             state: Final state (succeeded, failed, partial)
@@ -351,66 +338,64 @@ class RunManager:
         """
         query = """
             UPDATE runs
-            SET state = $2,
+            SET status = $2,
                 completed_at = NOW(),
-                metrics = $3,
-                error_message = $4,
-                error_code = $5,
+                error_message = $3,
+                error_code = $4,
                 updated_at = NOW()
-            WHERE run_id = $1::uuid
+            WHERE id = $1::uuid
         """
-        
+
         await self.db.execute(
             query,
             run_id,
             state,
-            json.dumps(metrics),
             error_message,
             error_code
         )
-        
+
         logger.info(f"Run {run_id} completed with state {state}")
-    
+
     async def get_run_status(self, run_id: str) -> Optional[Dict[str, Any]]:
         """
         Get run status and progress.
-        
+
         Args:
             run_id: Run ID
-            
+
         Returns:
             Run status or None if not found
         """
         query = """
-            SELECT run_id::text, state, phase_progress, metrics,
+            SELECT id::text, status, phase_progress,
                    error_message, error_code, created_at, completed_at
             FROM runs
-            WHERE run_id = $1::uuid
+            WHERE id = $1::uuid
         """
-        
+
         row = await self.db.fetchrow(query, run_id)
-        
+
         if row:
             return {
-                'run_id': row['run_id'],
-                'state': row['state'],
+                'run_id': row['id'],
+                'state': row['status'],
                 'phase_progress': json.loads(row['phase_progress']) if row['phase_progress'] else {},
-                'metrics': json.loads(row['metrics']) if row['metrics'] else {},
+                'metrics': {},  # TODO: fetch from metrics table if needed
                 'error_message': row['error_message'],
                 'error_code': row['error_code'],
                 'created_at': row['created_at'].isoformat() if row['created_at'] else None,
                 'completed_at': row['completed_at'].isoformat() if row['completed_at'] else None
             }
-        
+
         return None
-    
+
     async def check_cancel_requested(self, run_id: str) -> bool:
         """
         Check if cancellation requested for run.
-        
+
         Args:
             run_id: Run ID
-            
+
         Returns:
             True if cancel requested
         """
@@ -423,22 +408,22 @@ class CanonicalMappingCache:
     """
     Manages canonical mapping cache in database.
     """
-    
+
     def __init__(self, db: DatabasePool):
         self.db = db
-    
-    async def get_mapping(self, 
+
+    async def get_mapping(self,
                          column_name: str,
                          variant_value: str,
                          model_id: str = "gpt-4") -> Optional[str]:
         """
         Lookup canonical mapping from cache.
-        
+
         Args:
             column_name: Column name
             variant_value: Variant value to map
             model_id: LLM model ID
-            
+
         Returns:
             Canonical value or None if not cached
         """
@@ -452,15 +437,15 @@ class CanonicalMappingCache:
             ORDER BY created_at DESC
             LIMIT 1
         """
-        
+
         result = await self.db.fetchval(query, column_name, variant_value, model_id)
-        
+
         if result:
             # update usage stats
             await self._update_usage(column_name, variant_value, model_id)
-            
+
         return result
-    
+
     async def store_mapping(self,
                           column_name: str,
                           variant_value: str,
@@ -471,7 +456,7 @@ class CanonicalMappingCache:
                           source: str = "llm") -> None:
         """
         Store canonical mapping in cache.
-        
+
         Args:
             column_name: Column name
             variant_value: Variant value
@@ -490,21 +475,21 @@ class CanonicalMappingCache:
               AND model_id = $3
               AND superseded_at IS NULL
         """
-        
+
         await self.db.execute(supersede_query, column_name, variant_value, model_id)
-        
+
         # insert new mapping
         insert_query = """
-            INSERT INTO canonical_mappings 
-                (column_name, variant_value, canonical_value, model_id, 
+            INSERT INTO canonical_mappings
+                (column_name, variant_value, canonical_value, model_id,
                  prompt_version, confidence, source)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
-            ON CONFLICT (column_name, variant_value, model_id, prompt_version) 
+            ON CONFLICT (column_name, variant_value, model_id, prompt_version)
             DO UPDATE SET
                 use_count = canonical_mappings.use_count + 1,
                 last_used_at = NOW()
         """
-        
+
         await self.db.execute(
             insert_query,
             column_name,
@@ -515,7 +500,7 @@ class CanonicalMappingCache:
             confidence,
             source
         )
-    
+
     async def _update_usage(self, column_name: str, variant_value: str, model_id: str) -> None:
         """Update usage statistics for a mapping."""
         query = """
@@ -527,18 +512,18 @@ class CanonicalMappingCache:
               AND model_id = $3
               AND superseded_at IS NULL
         """
-        
+
         await self.db.execute(query, column_name, variant_value, model_id)
-    
+
     async def get_cache_stats(self) -> Dict[str, Any]:
         """
         Get cache statistics.
-        
+
         Returns:
             Cache statistics
         """
         query = """
-            SELECT 
+            SELECT
                 COUNT(*) as total_mappings,
                 COUNT(DISTINCT column_name) as unique_columns,
                 COUNT(DISTINCT variant_value) as unique_variants,
@@ -547,9 +532,9 @@ class CanonicalMappingCache:
             FROM canonical_mappings
             WHERE superseded_at IS NULL
         """
-        
+
         row = await self.db.fetchrow(query)
-        
+
         return {
             'total_mappings': row['total_mappings'],
             'unique_columns': row['unique_columns'],
@@ -563,10 +548,10 @@ class ArtifactStore:
     """
     Manages artifact metadata in database.
     """
-    
+
     def __init__(self, db: DatabasePool):
         self.db = db
-    
+
     async def register_artifact(self,
                                run_id: str,
                                artifact_type: str,
@@ -578,7 +563,7 @@ class ArtifactStore:
                                row_count: Optional[int] = None) -> str:
         """
         Register an artifact in the database.
-        
+
         Args:
             run_id: Run ID
             artifact_type: Type of artifact
@@ -588,18 +573,18 @@ class ArtifactStore:
             size_bytes: File size in bytes
             mime_type: MIME type
             row_count: Optional row count
-            
+
         Returns:
             Artifact ID
         """
         query = """
-            INSERT INTO artifacts 
-                (run_id, artifact_type, file_name, content_hash, 
+            INSERT INTO artifacts
+                (run_id, artifact_type, file_name, content_hash,
                  storage_path, size_bytes, mime_type, row_count)
             VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id::text
         """
-        
+
         artifact_id = await self.db.fetchval(
             query,
             run_id,
@@ -611,31 +596,31 @@ class ArtifactStore:
             mime_type,
             row_count
         )
-        
+
         logger.info(f"Registered artifact {artifact_id} for run {run_id}")
         return artifact_id
-    
+
     async def list_artifacts(self, run_id: str) -> List[Dict[str, Any]]:
         """
         List artifacts for a run.
-        
+
         Args:
             run_id: Run ID
-            
+
         Returns:
             List of artifact metadata
         """
         query = """
-            SELECT id::text, artifact_type, file_name, 
-                   content_hash, storage_path, size_bytes, 
+            SELECT id::text, artifact_type, file_name,
+                   content_hash, storage_path, size_bytes,
                    mime_type, row_count, created_at
             FROM artifacts
             WHERE run_id = $1::uuid
             ORDER BY created_at
         """
-        
+
         rows = await self.db.fetch(query, run_id)
-        
+
         return [
             {
                 'id': row['id'],
@@ -650,14 +635,14 @@ class ArtifactStore:
             }
             for row in rows
         ]
-    
+
     async def get_artifact(self, artifact_id: str) -> Optional[Dict[str, Any]]:
         """
         Get artifact metadata.
-        
+
         Args:
             artifact_id: Artifact ID
-            
+
         Returns:
             Artifact metadata or None
         """
@@ -668,9 +653,9 @@ class ArtifactStore:
             FROM artifacts
             WHERE id = $1::uuid
         """
-        
+
         row = await self.db.fetchrow(query, artifact_id)
-        
+
         if row:
             return {
                 'id': row['id'],
@@ -684,7 +669,7 @@ class ArtifactStore:
                 'row_count': row['row_count'],
                 'created_at': row['created_at'].isoformat() if row['created_at'] else None
             }
-        
+
         return None
 
 
@@ -695,33 +680,33 @@ _db_pool: Optional[DatabasePool] = None
 async def get_database() -> DatabasePool:
     """
     Get the global database pool instance.
-    
+
     Returns:
         Database pool
-        
+
     Raises:
         DatabaseConnectionError: If not initialized
     """
     global _db_pool
-    
+
     if not _db_pool:
         _db_pool = DatabasePool()
         await _db_pool.initialize()
-    
+
     if not _db_pool.is_healthy:
         # try to reconnect
         await _db_pool.initialize()
-        
+
         if not _db_pool.is_healthy:
             raise DatabaseConnectionError("Database is not healthy")
-    
+
     return _db_pool
 
 
 async def close_database() -> None:
     """Close the global database pool."""
     global _db_pool
-    
+
     if _db_pool:
         await _db_pool.close()
         _db_pool = None
