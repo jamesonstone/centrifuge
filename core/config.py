@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     llm_seed: int = 42
     openai_api_key: Optional[str] = None
     
+    # Additional LLM providers
+    google_genai_use_vertexai: bool = False
+    gemini_api_key: Optional[str] = None
+    anthropic_api_key: Optional[str] = None
+    
     # Processing limits
     edit_cap_pct: int = 20
     confidence_floor: float = 0.80
