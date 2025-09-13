@@ -38,6 +38,26 @@ class Settings(BaseSettings):
     row_limit: int = 50000
     batch_size: int = 15  # for LLM batching
     
+    # API settings
+    max_file_size: int = 50 * 1024 * 1024  # 50MB
+    
+    # Cache settings
+    cache_ttl_seconds: int = 86400  # 24 hours
+    cache_max_size: int = 10000
+    
+    # MinIO settings (aliases for compatibility)
+    @property
+    def MINIO_ENDPOINT(self) -> str:
+        return self.artifact_endpoint
+    
+    @property
+    def MINIO_BUCKET(self) -> str:
+        return self.artifact_bucket
+    
+    @property
+    def MAX_FILE_SIZE(self) -> int:
+        return self.max_file_size
+    
     # Worker configuration
     worker_id: str = "worker-default"
     heartbeat_interval: int = 30  # seconds
