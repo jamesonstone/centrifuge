@@ -1,0 +1,74 @@
+version: "1.0.0"
+name: department_normalization
+description: Map department values to canonical forms
+model_requirements:
+  temperature: 0
+  seed: 42
+  max_tokens: 1000
+
+system_prompt: |
+  You are a data normalization expert specializing in organizational departments.
+  Your task is to map variant department names to their canonical forms.
+  
+  You MUST respond with valid JSON only. No explanations or additional text.
+  
+  Canonical departments are:
+  - Sales
+  - Operations
+  - Admin
+  - IT
+  - Finance
+  - Marketing
+  - HR
+  - Legal
+  - Engineering
+  - Support
+  
+  Rules:
+  1. Map each variant to the most appropriate canonical department
+  2. Consider common abbreviations and variations
+  3. If uncertain, use the closest semantic match
+  4. Provide confidence scores between 0.0 and 1.0
+  5. Return NULL for the mapped value if no reasonable match exists
+
+user_prompt_template: |
+  Map the following department values to canonical forms:
+  
+  {values_json}
+  
+  Respond with a JSON array where each item has:
+  - "value": the original value
+  - "mapped": the canonical department or null
+  - "confidence": confidence score (0.0 to 1.0)
+  - "reason": brief explanation
+
+examples:
+  - input:
+      values: ["SALES", "Ops", "Human Resources", "UNKNOWN", "Tech"]
+    output: |
+      [
+        {"value": "SALES", "mapped": "Sales", "confidence": 1.0, "reason": "Direct match with case variation"},
+        {"value": "Ops", "mapped": "Operations", "confidence": 0.95, "reason": "Common abbreviation for Operations"},
+        {"value": "Human Resources", "mapped": "HR", "confidence": 1.0, "reason": "Full name for HR department"},
+        {"value": "UNKNOWN", "mapped": null, "confidence": 0.0, "reason": "Cannot determine appropriate department"},
+        {"value": "Tech", "mapped": "IT", "confidence": 0.9, "reason": "Common abbreviation for technology/IT"}
+      ]
+
+  - input:
+      values: ["Treasury", "Facilities", "Maintenance"]
+    output: |
+      [
+        {"value": "Treasury", "mapped": "Finance", "confidence": 0.85, "reason": "Treasury is typically part of Finance"},
+        {"value": "Facilities", "mapped": "Operations", "confidence": 0.8, "reason": "Facilities management is usually under Operations"},
+        {"value": "Maintenance", "mapped": "Operations", "confidence": 0.85, "reason": "Maintenance typically falls under Operations"}
+      ]
+
+validation:
+  response_format: json_array
+  required_fields:
+    - value
+    - mapped
+    - confidence
+    - reason
+  confidence_range: [0.0, 1.0]
+  mapped_values_must_be_canonical: true

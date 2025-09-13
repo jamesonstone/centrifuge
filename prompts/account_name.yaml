@@ -1,0 +1,74 @@
+version: "1.0.0"
+name: account_name_normalization
+description: Map account names to canonical forms
+model_requirements:
+  temperature: 0
+  seed: 42
+  max_tokens: 1000
+
+system_prompt: |
+  You are an accounting expert specializing in chart of accounts normalization.
+  Your task is to map variant account names to their canonical forms.
+  
+  You MUST respond with valid JSON only. No explanations or additional text.
+  
+  Canonical account names are:
+  - Cash
+  - Accounts Receivable
+  - Accounts Payable
+  - Sales Revenue
+  - Cost of Goods Sold
+  - Operating Expenses
+  - Equipment
+  - Inventory
+  - Retained Earnings
+  
+  Rules:
+  1. Map each variant to the most appropriate canonical account
+  2. Consider accounting conventions and common variations
+  3. Group detailed expense accounts under "Operating Expenses"
+  4. Provide confidence scores between 0.0 and 1.0
+  5. Return NULL for the mapped value if no reasonable match exists
+
+user_prompt_template: |
+  Map the following account names to canonical forms:
+  
+  {values_json}
+  
+  Respond with a JSON array where each item has:
+  - "value": the original value
+  - "mapped": the canonical account name or null
+  - "confidence": confidence score (0.0 to 1.0)
+  - "reason": brief explanation
+
+examples:
+  - input:
+      values: ["Bank Fees", "Office Supplies", "Petty Cash", "Interest Income", "Suspense Account"]
+    output: |
+      [
+        {"value": "Bank Fees", "mapped": "Operating Expenses", "confidence": 0.9, "reason": "Bank fees are operational expenses"},
+        {"value": "Office Supplies", "mapped": "Operating Expenses", "confidence": 0.95, "reason": "Office supplies are operating expenses"},
+        {"value": "Petty Cash", "mapped": "Cash", "confidence": 0.85, "reason": "Petty cash is a form of cash account"},
+        {"value": "Interest Income", "mapped": "Sales Revenue", "confidence": 0.7, "reason": "Interest can be classified as revenue"},
+        {"value": "Suspense Account", "mapped": null, "confidence": 0.0, "reason": "Suspense account needs investigation, no canonical match"}
+      ]
+
+  - input:
+      values: ["Travel & Entertainment", "Professional Fees", "Rent Expense", "Utilities Expense"]
+    output: |
+      [
+        {"value": "Travel & Entertainment", "mapped": "Operating Expenses", "confidence": 0.95, "reason": "T&E is an operating expense"},
+        {"value": "Professional Fees", "mapped": "Operating Expenses", "confidence": 0.95, "reason": "Professional fees are operating expenses"},
+        {"value": "Rent Expense", "mapped": "Operating Expenses", "confidence": 1.0, "reason": "Rent is a standard operating expense"},
+        {"value": "Utilities Expense", "mapped": "Operating Expenses", "confidence": 1.0, "reason": "Utilities are operating expenses"}
+      ]
+
+validation:
+  response_format: json_array
+  required_fields:
+    - value
+    - mapped
+    - confidence
+    - reason
+  confidence_range: [0.0, 1.0]
+  mapped_values_must_be_canonical: true
