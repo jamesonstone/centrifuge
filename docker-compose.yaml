@@ -178,7 +178,7 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       LITELLM_MODEL: "openai/gpt-5"
       LITELLM_LOG: "WARN"
-    command: ["--port", "4000"]
+    command: ["litellm", "--port", "4000"]
     ports:
       - "4000:4000"
     healthcheck:
@@ -186,6 +186,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 30
+  # ...existing code...
 
   # ──────────────────────────────────────────────────────────────────────────────
   # Future production event bus (commented out for PoC). Keep for reviewer context.

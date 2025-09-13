@@ -5,7 +5,7 @@ version: v1
 | # | Phase | Outcome | Progress | Confidence |
 |---|------|---------|----------|------------|
 | 0 | Repo & Infra Bootstrap | Local stack up via `docker-compose`; health endpoints respond | 100% | 98% |
-| 1 | Data Contracts | Finalize JSON contracts for schema, manifest, patch, audit, metrics, summary | 0% | 98% |
+| 1 | Data Contracts | Finalize JSON contracts for schema, manifest, patch, audit, metrics, summary | 100% | 98% |
 | 2 | Ingest & Profiling | Load CSV, sniff delimiter/encoding, normalize headers, compute input hash | 0% | 98% |
 | 3 | Validation-1 | Enforce required columns, types, enums, PK, domain rules (`debit_xor_credit`) | 0% | 98% |
 | 4 | Rules Engine | Idempotent transforms: alias→canonical, trim/case, typecast, ISO date, enum maps | 0% | 98% |
