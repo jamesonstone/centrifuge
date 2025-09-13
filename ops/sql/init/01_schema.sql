@@ -30,40 +30,30 @@ CREATE TYPE error_category AS ENUM (
 -- RUNS TABLE - Core run tracking
 -- =====================================================================
 CREATE TABLE runs (
-    id UUID PRIMARY KEY DEFAULT generate_uuidv7(),
+    run_id UUID PRIMARY KEY DEFAULT generate_uuidv7(),
     run_seq BIGSERIAL UNIQUE NOT NULL, -- human-friendly sequential ID
     
-    -- Input tracking
-    input_file_name VARCHAR(255),
-    input_file_hash VARCHAR(64) NOT NULL, -- SHA256 of input file
-    input_row_count INTEGER,
+    -- Core fields
+    state VARCHAR(20) NOT NULL DEFAULT 'queued',
+    input_hash VARCHAR(64) NOT NULL,
+    schema_version VARCHAR(50),
     
-    -- Status and progress
-    status run_status NOT NULL DEFAULT 'queued',
-    phase_progress JSONB DEFAULT '{"phase": "queued", "percent": 0}'::jsonb,
-    
-    -- Options
+    -- Options and config
     options JSONB NOT NULL DEFAULT '{}'::jsonb,
-    use_inferred BOOLEAN DEFAULT FALSE,
-    dry_run BOOLEAN DEFAULT FALSE,
-    llm_columns TEXT[] DEFAULT ARRAY['Department', 'Account Name'],
     
-    -- Worker assignment
-    worker_id VARCHAR(50),
-    claimed_at TIMESTAMPTZ,
-    heartbeat_at TIMESTAMPTZ,
-    
-    -- Timing
+    -- Worker management
+    claimed_by VARCHAR(50),
     started_at TIMESTAMPTZ,
+    heartbeat_at TIMESTAMPTZ,
     completed_at TIMESTAMPTZ,
     
-    -- Results summary
-    total_rows INTEGER,
-    cleaned_rows INTEGER,
-    quarantined_rows INTEGER,
-    rules_fixed_count INTEGER,
-    llm_fixed_count INTEGER,
-    error_breakdown JSONB DEFAULT '{}'::jsonb,
+    -- Progress and metrics
+    phase_progress JSONB DEFAULT '{}'::jsonb,
+    metrics JSONB DEFAULT '{}'::jsonb,
+    
+    -- Error tracking
+    error_message TEXT,
+    error_code VARCHAR(50),
     
     -- Metadata
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -71,10 +61,10 @@ CREATE TABLE runs (
 );
 
 -- Indexes for runs
-CREATE INDEX idx_runs_status ON runs(status);
-CREATE INDEX idx_runs_worker ON runs(worker_id, status);
+CREATE INDEX idx_runs_status ON runs(state);
+CREATE INDEX idx_runs_worker ON runs(claimed_by, state);
 CREATE INDEX idx_runs_created ON runs(created_at DESC);
-CREATE INDEX idx_runs_heartbeat ON runs(heartbeat_at) WHERE status = 'running';
+CREATE INDEX idx_runs_heartbeat ON runs(heartbeat_at) WHERE state = 'running';
 
 -- =====================================================================
 -- SCHEMAS TABLE - Store schema definitions
@@ -156,7 +146,7 @@ CREATE INDEX idx_mappings_approved ON canonical_mappings(is_approved)
 -- =====================================================================
 CREATE TABLE artifacts (
     id UUID PRIMARY KEY DEFAULT generate_uuidv7(),
-    run_id UUID NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    run_id UUID NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
     
     -- Artifact identification
     artifact_type VARCHAR(50) NOT NULL, -- cleaned, errors, diff, audit, manifest, metrics, summary
@@ -183,7 +173,7 @@ CREATE INDEX idx_artifacts_type ON artifacts(run_id, artifact_type);
 -- =====================================================================
 CREATE TABLE audit_log (
     id UUID PRIMARY KEY DEFAULT generate_uuidv7(),
-    run_id UUID NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    run_id UUID NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
     
     -- Change details
     row_uuid UUID NOT NULL,

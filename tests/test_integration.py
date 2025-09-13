@@ -11,7 +11,7 @@ import pytest
 from core.models import (
     Schema, ColumnDefinition, DataType, ColumnPolicy,
     RunManifest, RunMetrics, SourceType,
-    Patch, AuditEvent, Diff, QuarantineRow, ErrorCategory
+    Patch, AuditEvent, DiffEntry, QuarantineRow, ErrorCategory
 )
 from core.artifacts import ArtifactManager
 
@@ -174,7 +174,7 @@ def test_artifact_generation(tmp_path):
     
     # Create diffs
     diffs = [
-        Diff(
+        DiffEntry(
             row_uuid=uuid4(),
             row_number=1,
             column_name="department",
@@ -185,7 +185,7 @@ def test_artifact_generation(tmp_path):
             confidence=1.0,
             timestamp=datetime.now()
         ),
-        Diff(
+        DiffEntry(
             row_uuid=uuid4(),
             row_number=2,
             column_name="department",

@@ -2,14 +2,15 @@
 
 import hashlib
 import json
+from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
 import pandas as pd
 import pytest
 
-from core.models import Schema, ColumnDefinition, DataType, ColumnPolicy
-from core.rules import RulesEngine
+from core.models import Schema, ColumnDefinition, DataType, ColumnPolicy, RunOptions
+from core.rules import RuleEngine
 from core.validation import Validator
 from core.ingest import DataIngestor
 
@@ -44,11 +45,13 @@ GOLDEN_CLEANED_CSV = """row_uuid,row_number,transaction_id,date,department,accou
 
 def create_test_schema() -> Schema:
     """Create test schema for golden tests."""
+    from core.models import SchemaConstraints
+
     return Schema(
         version="1.0.0",
         columns=[
             ColumnDefinition(
-                name="transaction_id",
+                name="transaction_id",  # Matches header alias
                 display_name="Transaction ID",
                 data_type=DataType.STRING,
                 required=True,
@@ -56,14 +59,14 @@ def create_test_schema() -> Schema:
                 is_primary_key=True
             ),
             ColumnDefinition(
-                name="date",
+                name="date",  # Matches header alias
                 display_name="Date",
                 data_type=DataType.DATE,
                 required=True,
                 policy=ColumnPolicy.RULE_ONLY
             ),
             ColumnDefinition(
-                name="department",
+                name="department",  # Matches header alias
                 display_name="Department",
                 data_type=DataType.STRING,
                 required=True,
@@ -71,7 +74,7 @@ def create_test_schema() -> Schema:
                 allowed_values=["Sales", "Operations", "Finance", "IT", "HR", "Marketing", "Admin"]
             ),
             ColumnDefinition(
-                name="account_name",
+                name="account_name",  # Matches header alias
                 display_name="Account Name",
                 data_type=DataType.STRING,
                 required=True,
@@ -79,28 +82,28 @@ def create_test_schema() -> Schema:
                 allowed_values=["Cash", "Accounts Receivable", "Accounts Payable", "Petty Cash"]
             ),
             ColumnDefinition(
-                name="description",
+                name="description",  # Matches header alias
                 display_name="Description",
                 data_type=DataType.STRING,
                 required=False,
                 policy=ColumnPolicy.RULE_ONLY
             ),
             ColumnDefinition(
-                name="debit_amount",
+                name="debit_amount",  # Matches header alias
                 display_name="Debit Amount",
                 data_type=DataType.DECIMAL,
                 required=False,
                 policy=ColumnPolicy.RULE_ONLY
             ),
             ColumnDefinition(
-                name="credit_amount",
+                name="credit_amount",  # Matches header alias
                 display_name="Credit Amount",
                 data_type=DataType.DECIMAL,
                 required=False,
                 policy=ColumnPolicy.RULE_ONLY
             ),
             ColumnDefinition(
-                name="reference_number",
+                name="reference_number",  # Matches header alias
                 display_name="Reference Number",
                 data_type=DataType.STRING,
                 required=True,
@@ -108,7 +111,7 @@ def create_test_schema() -> Schema:
                 pattern=r"^REF-\d{3}$"
             ),
             ColumnDefinition(
-                name="created_by",
+                name="created_by",  # Matches header alias
                 display_name="Created By",
                 data_type=DataType.STRING,
                 required=True,
@@ -125,76 +128,77 @@ def create_test_schema() -> Schema:
             "Credit Amount": "credit_amount",
             "Reference Number": "reference_number",
             "Created By": "created_by"
-        }
+        },
+        constraints=SchemaConstraints(debit_xor_credit=True)
     )
 
 
 class TestGolden:
     """Golden tests for expected outputs."""
-    
+
     def test_rules_engine_golden(self, tmp_path):
         """Test rules engine produces expected transformations."""
         # Setup
         schema = create_test_schema()
-        
+
         # Create input CSV
         input_file = tmp_path / "input.csv"
         input_file.write_text(GOLDEN_INPUT_CSV)
-        
+
         # Ingest data
         ingestor = DataIngestor(schema)
         df, _, _ = ingestor.ingest_csv(str(input_file))
-        
+
         # Apply rules
-        rules_engine = RulesEngine(schema)
+        rules_engine = RuleEngine(schema)
         cleaned_df, patches, audit_events, diffs = rules_engine.apply_rules(df, uuid4())
-        
+
         # Verify transformations
         assert len(cleaned_df) == 10, "Should have 10 rows"
-        
+
         # Check specific transformations
         # Department normalization
         assert cleaned_df.iloc[0]['department'] == 'Sales'  # was 'sales'
         assert cleaned_df.iloc[1]['department'] == 'Operations'  # was 'OPERATIONS'
         assert cleaned_df.iloc[6]['department'] == 'Marketing'  # was 'marketing'
-        
+
         # Account name normalization
         assert cleaned_df.iloc[0]['account_name'] == 'Cash'  # was 'cash'
         assert cleaned_df.iloc[1]['account_name'] == 'Accounts Receivable'  # was 'accounts receivable'
         assert cleaned_df.iloc[4]['account_name'] == 'Petty Cash'  # was 'PETTY CASH'
-        
+
         # Date normalization
         assert cleaned_df.iloc[2]['date'] == '2024-01-17'  # was '01/17/2024'
         assert cleaned_df.iloc[4]['date'] == '2024-01-19'  # was 'Jan 19 2024'
         assert cleaned_df.iloc[6]['date'] == '2024-01-21'  # was '21st January 2024'
-        
+
         # Reference number normalization
         assert cleaned_df.iloc[2]['reference_number'] == 'REF-003'  # was 'REF003'
         assert cleaned_df.iloc[4]['reference_number'] == 'REF-005'  # was 'REF005'
         assert cleaned_df.iloc[6]['reference_number'] == 'REF-007'  # was 'ref007'
-        
+
         # Amount normalization
-        assert cleaned_df.iloc[0]['debit_amount'] == 0.00  # was empty
-        assert cleaned_df.iloc[0]['credit_amount'] == 1000.00
-        assert cleaned_df.iloc[2]['debit_amount'] == 750.00
-        assert cleaned_df.iloc[2]['credit_amount'] == 0.00  # was empty
-        
+        assert cleaned_df.iloc[0]['debit_amount'] == '0.00'  # was empty
+        assert cleaned_df.iloc[0]['credit_amount'] == '1000.00'
+        assert cleaned_df.iloc[2]['debit_amount'] == '750.00'
+        assert cleaned_df.iloc[2]['credit_amount'] == '0.00'  # was empty
+
         # Verify patches were created
         assert len(patches) > 0, "Should have patches"
-        
+
         # Verify audit events
         assert len(audit_events) > 0, "Should have audit events"
-        
+
         # Verify diffs
         assert len(diffs) > 0, "Should have diffs"
         department_diffs = [d for d in diffs if d.column_name == 'department']
         assert len(department_diffs) >= 4, "Should have department normalizations"
-    
+
     def test_validation_golden(self):
         """Test validation catches expected errors."""
         schema = create_test_schema()
         validator = Validator(schema)
-        
+
         # Create test data with known issues
         invalid_data = pd.DataFrame([
             {
@@ -224,74 +228,79 @@ class TestGolden:
                 'created_by': ''  # Missing required field
             }
         ])
-        
+
         valid_df, quarantine_df, errors = validator.validate(invalid_data)
-        
+
         # Verify both rows are quarantined
         assert len(quarantine_df) == 2, "Both rows should be quarantined"
         assert len(valid_df) == 0, "No rows should be valid"
-        
+
         # Verify specific errors are caught
         error_types = {e.error_type for e in errors}
-        assert 'enum_validation' in error_types, "Should catch invalid enum"
+        assert 'enum_violation' in error_types, "Should catch invalid enum"
         assert 'debit_xor_credit' in error_types, "Should catch debit/credit violation"
-        assert 'pattern_validation' in error_types, "Should catch pattern mismatch"
+        assert 'pattern_violation' in error_types, "Should catch pattern mismatch"
         assert 'required_field' in error_types, "Should catch missing required fields"
-    
+
     def test_end_to_end_golden(self, tmp_path):
         """Test complete pipeline produces expected results."""
         from core.artifacts import ArtifactManager
         from core.models import RunManifest, RunMetrics
-        
+
         # Setup
         schema = create_test_schema()
         run_id = uuid4()
-        
+
         # Create input CSV
         input_file = tmp_path / "input.csv"
         input_file.write_text(GOLDEN_INPUT_CSV)
-        
+
         # Phase 1: Ingest
         ingestor = DataIngestor(schema)
         df, input_hash, header_mapping = ingestor.ingest_csv(str(input_file))
-        
+
         # Phase 2: Initial validation
         validator = Validator(schema)
         _, _, initial_errors = validator.validate(df)
-        
+
         # Phase 3: Rules engine
-        rules_engine = RulesEngine(schema)
+        rules_engine = RuleEngine(schema)
         cleaned_df, patches, audit_events, diffs = rules_engine.apply_rules(df, run_id)
-        
+
         # Phase 4: Final validation
         valid_df, quarantine_df, final_errors = validator.validate(cleaned_df)
-        
+
         # Phase 5: Generate artifacts
         manifest = RunManifest(
             run_id=run_id,
-            input_hash=input_hash,
+            run_seq=1,  # Added required field
+            input_file_name="input.csv",  # Added required field
+            input_file_hash=input_hash,  # Corrected field name
+            input_row_count=len(df),  # Added required field
             schema_version=schema.version,
-            model_version="gpt-5",
+            model_id="gpt-5",  # Corrected field name
             prompt_version="v1",
-            recipe_version="v1",
+            engine_version="v1",  # Corrected field name
             seed=42,
-            options={},
-            versions={"centrifuge": "1.0.0"},
+            options=RunOptions(),  # Use proper RunOptions object
+            started_at=datetime.now(),  # Added required field
             idempotency_key=f"{input_hash}_{schema.version}"
         )
-        
+
         metrics = RunMetrics(
             run_id=run_id,
             total_rows=len(df),
-            clean_rows=len(valid_df),
-            quarantined_rows=len(quarantine_df),
-            success_rate=len(valid_df) / len(df) if len(df) > 0 else 0,
-            quarantine_rate=len(quarantine_df) / len(df) if len(df) > 0 else 0,
-            rules_applied=len(patches),
+            total_cells=len(df) * len(df.columns),
+            cells_validated=len(df) * len(df.columns),
+            cells_modified=len(patches),
+            cells_quarantined=len(quarantine_df) * len(df.columns) if len(quarantine_df) > 0 else 0,
             rules_fixed_count=len(patches),
-            rules_fixed_percentage=len(patches) / len(df) if len(df) > 0 else 0
+            rules_duration_ms=100,
+            llm_duration_ms=0,
+            validation_duration_ms=50,
+            total_duration_ms=150
         )
-        
+
         artifact_manager = ArtifactManager(run_id, schema)
         artifacts = artifact_manager.generate_all_artifacts(
             cleaned_df=valid_df,
@@ -303,15 +312,15 @@ class TestGolden:
             quarantine_rows=[],
             quarantine_stats={}
         )
-        
+
         # Verify artifacts
         assert 'cleaned.csv' in artifacts
         assert 'manifest.json' in artifacts
         assert 'metrics.json' in artifacts
         assert 'summary.md' in artifacts
-        
+
         # All rows should be valid after rules
         assert len(valid_df) == 10, "All rows should be valid after rules"
         assert len(quarantine_df) == 0, "No rows should be quarantined"
-        
+
         print(f"✅ Golden test passed: {len(valid_df)} rows cleaned successfully")

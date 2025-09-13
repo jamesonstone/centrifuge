@@ -8,7 +8,7 @@ from uuid import UUID
 import psycopg
 from psycopg import sql
 from psycopg.rows import dict_row
-import uuid7
+from uuid_extensions import uuid7
 
 from core.models import RunStatus, SourceType, ErrorCategory
 from core.config import settings
@@ -16,12 +16,12 @@ from core.config import settings
 
 class DatabaseManager:
     """Manages database connections and operations."""
-    
+
     def __init__(self, connection_string: str = None):
         """Initialize database manager."""
         self.connection_string = connection_string or settings.database_url
         self._pool = None
-    
+
     async def initialize(self):
         """Initialize connection pool."""
         if not self._pool:
@@ -30,23 +30,23 @@ class DatabaseManager:
                 min_size=2,
                 max_size=10,
             )
-    
+
     async def close(self):
         """Close connection pool."""
         if self._pool:
             await self._pool.close()
             self._pool = None
-    
+
     async def get_connection(self):
         """Get a connection from the pool."""
         if not self._pool:
             await self.initialize()
         return self._pool.connection()
-    
+
     # =====================================================================
     # RUN OPERATIONS
     # =====================================================================
-    
+
     async def create_run(
         self,
         input_file_name: str,
@@ -81,7 +81,7 @@ class DatabaseManager:
                     )
                 )
                 return await cur.fetchone()
-    
+
     async def get_run(self, run_id: UUID) -> Optional[Dict[str, Any]]:
         """Get run details by ID."""
         async with await self.get_connection() as conn:
@@ -91,7 +91,7 @@ class DatabaseManager:
                 """
                 await cur.execute(query, (str(run_id),))
                 return await cur.fetchone()
-    
+
     async def claim_run(self, worker_id: str) -> Optional[Dict[str, Any]]:
         """Claim a queued run for processing."""
         async with await self.get_connection() as conn:
@@ -107,7 +107,7 @@ class DatabaseManager:
                     await cur.execute(run_query, (result['run_id'],))
                     return await cur.fetchone()
                 return None
-    
+
     async def update_run_status(
         self,
         run_id: UUID,
@@ -121,11 +121,11 @@ class DatabaseManager:
                 # Build dynamic update query
                 fields = ["status = %s", "updated_at = NOW()"]
                 values = [status.value]
-                
+
                 if phase_progress:
                     fields.append("phase_progress = %s")
                     values.append(json.dumps(phase_progress))
-                
+
                 # Add any additional fields
                 for key, value in kwargs.items():
                     if key in [
@@ -135,16 +135,16 @@ class DatabaseManager:
                     ]:
                         fields.append(f"{key} = %s")
                         values.append(value)
-                
+
                 values.append(str(run_id))
-                
+
                 query = f"""
                     UPDATE runs SET {', '.join(fields)}
                     WHERE id = %s
                 """
                 await cur.execute(query, values)
                 return cur.rowcount > 0
-    
+
     async def update_heartbeat(self, run_id: UUID, worker_id: str) -> bool:
         """Update worker heartbeat for a run."""
         async with await self.get_connection() as conn:
@@ -155,22 +155,22 @@ class DatabaseManager:
                 await cur.execute(query, (str(run_id), worker_id))
                 result = await cur.fetchone()
                 return result[0] if result else False
-    
+
     # =====================================================================
     # SCHEMA OPERATIONS
     # =====================================================================
-    
+
     async def get_schema(self, name: str, version: str) -> Optional[Dict[str, Any]]:
         """Get schema by name and version."""
         async with await self.get_connection() as conn:
             async with conn.cursor(row_factory=dict_row) as cur:
                 query = """
-                    SELECT * FROM schemas 
+                    SELECT * FROM schemas
                     WHERE name = %s AND version = %s AND is_active = true
                 """
                 await cur.execute(query, (name, version))
                 return await cur.fetchone()
-    
+
     async def list_schemas(self) -> List[Dict[str, Any]]:
         """List all active schemas."""
         async with await self.get_connection() as conn:
@@ -182,11 +182,11 @@ class DatabaseManager:
                 """
                 await cur.execute(query)
                 return await cur.fetchall()
-    
+
     # =====================================================================
     # CANONICAL MAPPING OPERATIONS
     # =====================================================================
-    
+
     async def get_canonical_mapping(
         self,
         column_name: str,
@@ -197,7 +197,7 @@ class DatabaseManager:
             async with conn.cursor(row_factory=dict_row) as cur:
                 query = """
                     SELECT * FROM canonical_mappings
-                    WHERE column_name = %s 
+                    WHERE column_name = %s
                       AND variant_value = %s
                       AND is_approved = true
                       AND superseded_at IS NULL
@@ -206,7 +206,7 @@ class DatabaseManager:
                 """
                 await cur.execute(query, (column_name, variant_value))
                 return await cur.fetchone()
-    
+
     async def create_canonical_mapping(
         self,
         column_name: str,
@@ -239,7 +239,7 @@ class DatabaseManager:
                 )
                 result = await cur.fetchone()
                 return UUID(result[0]) if result else None
-    
+
     async def get_mappings_batch(
         self,
         column_name: str,
@@ -259,11 +259,11 @@ class DatabaseManager:
                 await cur.execute(query, (column_name, variant_values))
                 results = await cur.fetchall()
                 return {r['variant_value']: r['canonical_value'] for r in results}
-    
+
     # =====================================================================
     # ARTIFACT OPERATIONS
     # =====================================================================
-    
+
     async def create_artifact(
         self,
         run_id: UUID,
@@ -301,7 +301,7 @@ class DatabaseManager:
                 )
                 result = await cur.fetchone()
                 return UUID(result[0]) if result else None
-    
+
     async def get_run_artifacts(self, run_id: UUID) -> List[Dict[str, Any]]:
         """Get all artifacts for a run."""
         async with await self.get_connection() as conn:
@@ -313,11 +313,11 @@ class DatabaseManager:
                 """
                 await cur.execute(query, (str(run_id),))
                 return await cur.fetchall()
-    
+
     # =====================================================================
     # AUDIT OPERATIONS
     # =====================================================================
-    
+
     async def create_audit_event(
         self,
         run_id: UUID,
@@ -359,7 +359,7 @@ class DatabaseManager:
                 )
                 result = await cur.fetchone()
                 return UUID(result[0]) if result else None
-    
+
     async def create_audit_events_batch(
         self,
         events: List[Dict[str, Any]]
@@ -367,7 +367,7 @@ class DatabaseManager:
         """Create multiple audit events efficiently."""
         if not events:
             return 0
-        
+
         async with await self.get_connection() as conn:
             async with conn.cursor() as cur:
                 # Use COPY for efficient bulk insert
@@ -376,7 +376,7 @@ class DatabaseManager:
                     "after_value", "source", "rule_id", "contract_id",
                     "reason", "confidence"
                 ]
-                
+
                 async with cur.copy(
                     f"COPY audit_log ({', '.join(columns)}) FROM STDIN"
                 ) as copy:
@@ -393,13 +393,13 @@ class DatabaseManager:
                             event.get('reason'),
                             event.get('confidence')
                         ])
-                
+
                 return len(events)
-    
+
     # =====================================================================
     # METRICS OPERATIONS
     # =====================================================================
-    
+
     async def create_metrics(
         self,
         run_id: UUID,
@@ -411,7 +411,7 @@ class DatabaseManager:
                 # Build insert query with available fields
                 fields = ["run_id"]
                 values = [str(run_id)]
-                
+
                 # Map metrics data to database columns
                 field_mapping = {
                     "total_cells": "total_cells",
@@ -432,15 +432,15 @@ class DatabaseManager:
                     "edit_cap_exceeded_count": "edit_cap_exceeded_count",
                     "parse_errors": "parse_errors"
                 }
-                
+
                 for key, db_field in field_mapping.items():
                     if key in metrics_data:
                         fields.append(db_field)
                         values.append(metrics_data[key])
-                
+
                 placeholders = ", ".join(["%s"] * len(values))
                 fields_str = ", ".join(fields)
-                
+
                 query = f"""
                     INSERT INTO metrics ({fields_str})
                     VALUES ({placeholders})
@@ -449,24 +449,24 @@ class DatabaseManager:
                 await cur.execute(query, values)
                 result = await cur.fetchone()
                 return UUID(result[0]) if result else None
-    
+
     # =====================================================================
     # STATISTICS
     # =====================================================================
-    
+
     async def get_system_stats(self) -> Dict[str, Any]:
         """Get system-wide statistics."""
         async with await self.get_connection() as conn:
             async with conn.cursor(row_factory=dict_row) as cur:
                 query = """
-                    SELECT 
+                    SELECT
                         COUNT(*) as total_runs,
                         COUNT(*) FILTER (WHERE status = 'queued') as runs_queued,
                         COUNT(*) FILTER (WHERE status = 'running') as runs_running,
                         COUNT(*) FILTER (WHERE status = 'succeeded') as runs_succeeded,
                         COUNT(*) FILTER (WHERE status = 'partial') as runs_partial,
                         COUNT(*) FILTER (WHERE status = 'failed') as runs_failed,
-                        AVG(EXTRACT(EPOCH FROM (completed_at - started_at))) 
+                        AVG(EXTRACT(EPOCH FROM (completed_at - started_at)))
                             FILTER (WHERE completed_at IS NOT NULL) as avg_duration_seconds,
                         COUNT(DISTINCT worker_id) FILTER (WHERE status = 'running') as active_workers
                     FROM runs

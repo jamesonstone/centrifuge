@@ -164,3 +164,4 @@ cython_debug/
 #  be added to the global gitignore or merged into this project gitignore.  For a PyCharm
 #  project, it is best to add the content to the IDE-specific gitignore file.
 .idea/
+artifacts/*
