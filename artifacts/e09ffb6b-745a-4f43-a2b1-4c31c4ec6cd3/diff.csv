@@ -1,0 +1,32 @@
+row_uuid,row_number,column,before_value,after_value,source,reason,confidence,timestamp
+dc53500a-fe99-8271-e176-e6696908ea8f,1,debit_amount,,0.00,rule,Cleaned numeric formatting,1.0,2025-09-13T16:16:10.352594
+787285e1-f147-79ca-12fe-e0a4f80ddb53,2,debit_amount,,0.00,rule,Cleaned numeric formatting,1.0,2025-09-13T16:16:10.352666
+c9d82777-16fb-a999-18d4-e8b71e5fb299,6,debit_amount,,0.00,rule,Cleaned numeric formatting,1.0,2025-09-13T16:16:10.352794
+28acc8d6-2709-e518-6a83-c40e6b26a1c2,10,debit_amount,,0.00,rule,Cleaned numeric formatting,1.0,2025-09-13T16:16:10.352911
+63b6f069-ab0e-f600-9686-8a21dc377433,3,credit_amount,,0.00,rule,Cleaned numeric formatting,1.0,2025-09-13T16:16:10.353022
+21c4487d-62d6-67e0-02bb-599cab47ad87,4,credit_amount,,0.00,rule,Cleaned numeric formatting,1.0,2025-09-13T16:16:10.353072
+37c52d7d-9ba1-2d52-062c-fde7e78ba84f,5,credit_amount,,0.00,rule,Cleaned numeric formatting,1.0,2025-09-13T16:16:10.353127
+52a6460c-0e57-fdc0-5881-90593560b4bb,7,credit_amount,,0.00,rule,Cleaned numeric formatting,1.0,2025-09-13T16:16:10.353197
+be6620e6-ae27-c3ff-f24d-5079add3d62f,8,credit_amount,,0.00,rule,Cleaned numeric formatting,1.0,2025-09-13T16:16:10.353244
+24e93838-cde5-730e-25d2-fe69362022ac,9,credit_amount,,0.00,rule,Cleaned numeric formatting,1.0,2025-09-13T16:16:10.353298
+63b6f069-ab0e-f600-9686-8a21dc377433,3,date,01/17/2024,2024-01-17,rule,Normalized to ISO date format,1.0,2025-09-13T16:16:10.353477
+37c52d7d-9ba1-2d52-062c-fde7e78ba84f,5,date,Jan 19 2024,2024-01-19,rule,Normalized to ISO date format,1.0,2025-09-13T16:16:10.353605
+c9d82777-16fb-a999-18d4-e8b71e5fb299,6,date,2024/01/20,2024-01-20,rule,Normalized to ISO date format,1.0,2025-09-13T16:16:10.353683
+52a6460c-0e57-fdc0-5881-90593560b4bb,7,date,21st January 2024,2024-01-21,rule,Normalized to ISO date format,1.0,2025-09-13T16:16:10.353802
+24e93838-cde5-730e-25d2-fe69362022ac,9,date,23-01-2024,2024-01-23,rule,Normalized to ISO date format,1.0,2025-09-13T16:16:10.353918
+dc53500a-fe99-8271-e176-e6696908ea8f,1,department,sales,Sales,rule,Mapped department variant to canonical form,1.0,2025-09-13T16:16:10.354019
+787285e1-f147-79ca-12fe-e0a4f80ddb53,2,department,OPERATIONS,Operations,rule,Mapped department variant to canonical form,1.0,2025-09-13T16:16:10.354070
+37c52d7d-9ba1-2d52-062c-fde7e78ba84f,5,department,hr,HR,rule,Mapped department variant to canonical form,1.0,2025-09-13T16:16:10.354144
+52a6460c-0e57-fdc0-5881-90593560b4bb,7,department,marketing,Marketing,rule,Mapped department variant to canonical form,1.0,2025-09-13T16:16:10.354204
+be6620e6-ae27-c3ff-f24d-5079add3d62f,8,department,operations,Operations,rule,Mapped department variant to canonical form,1.0,2025-09-13T16:16:10.354254
+24e93838-cde5-730e-25d2-fe69362022ac,9,department,finance,Finance,rule,Mapped department variant to canonical form,1.0,2025-09-13T16:16:10.354299
+dc53500a-fe99-8271-e176-e6696908ea8f,1,account_name,cash,Cash,rule,Mapped account variant to canonical form,1.0,2025-09-13T16:16:10.354375
+787285e1-f147-79ca-12fe-e0a4f80ddb53,2,account_name,accounts receivable,Accounts Receivable,rule,Mapped account variant to canonical form,1.0,2025-09-13T16:16:10.354421
+21c4487d-62d6-67e0-02bb-599cab47ad87,4,account_name,cash,Cash,rule,Mapped account variant to canonical form,1.0,2025-09-13T16:16:10.354482
+37c52d7d-9ba1-2d52-062c-fde7e78ba84f,5,account_name,PETTY CASH,Petty Cash,rule,Applied title case to account name,1.0,2025-09-13T16:16:10.354530
+be6620e6-ae27-c3ff-f24d-5079add3d62f,8,account_name,accounts payable,Accounts Payable,rule,Mapped account variant to canonical form,1.0,2025-09-13T16:16:10.354607
+28acc8d6-2709-e518-6a83-c40e6b26a1c2,10,account_name,accounts receivable,Accounts Receivable,rule,Mapped account variant to canonical form,1.0,2025-09-13T16:16:10.354666
+63b6f069-ab0e-f600-9686-8a21dc377433,3,reference_number,REF003,REF-003,rule,Standardized reference number format,1.0,2025-09-13T16:16:10.354940
+37c52d7d-9ba1-2d52-062c-fde7e78ba84f,5,reference_number,REF005,REF-005,rule,Standardized reference number format,1.0,2025-09-13T16:16:10.355008
+52a6460c-0e57-fdc0-5881-90593560b4bb,7,reference_number,ref007,REF-007,rule,Standardized reference number format,1.0,2025-09-13T16:16:10.355082
+28acc8d6-2709-e518-6a83-c40e6b26a1c2,10,reference_number,REF010,REF-010,rule,Standardized reference number format,1.0,2025-09-13T16:16:10.355161

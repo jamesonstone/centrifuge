@@ -1,0 +1,11 @@
+transaction_id,date,department,account_name,description,debit_amount,credit_amount,reference_number,created_by,row_uuid,row_number
+TXN001,2024-01-15,Sales,Cash,Initial deposit,0.00,1000.00,REF-001,john.doe,dc53500a-fe99-8271-e176-e6696908ea8f,1
+TXN002,2024-01-16,Operations,Accounts Receivable,Customer payment,0.00,500.00,REF-002,jane.smith,787285e1-f147-79ca-12fe-e0a4f80ddb53,2
+TXN003,2024-01-17,Finance,Accounts Payable,Vendor payment,750.00,0.00,REF-003,admin,63b6f069-ab0e-f600-9686-8a21dc377433,3
+TXN004,2024-01-18,IT,Cash,Equipment purchase,1200.00,0.00,REF-004,system,21c4487d-62d6-67e0-02bb-599cab47ad87,4
+TXN005,2024-01-19,HR,Petty Cash,Office supplies,50.00,0.00,REF-005,hr.manager,37c52d7d-9ba1-2d52-062c-fde7e78ba84f,5
+TXN006,2024-01-20,Sales,Accounts Receivable,Sales invoice,0.00,2000.00,REF-006,sales.rep,c9d82777-16fb-a999-18d4-e8b71e5fb299,6
+TXN007,2024-01-21,Marketing,Cash,Marketing expense,300.00,0.00,REF-007,marketing.lead,52a6460c-0e57-fdc0-5881-90593560b4bb,7
+TXN008,2024-01-22,Operations,Accounts Payable,Utility bill,150.00,0.00,REF-008,ops.manager,be6620e6-ae27-c3ff-f24d-5079add3d62f,8
+TXN009,2024-01-23,Finance,Cash,Bank fees,25.00,0.00,REF-009,cfo,24e93838-cde5-730e-25d2-fe69362022ac,9
+TXN010,2024-01-24,IT,Accounts Receivable,Service charge,0.00,400.00,REF-010,it.support,28acc8d6-2709-e518-6a83-c40e6b26a1c2,10

@@ -1,0 +1,35 @@
+{
+  "run_id": "e09ffb6b-745a-4f43-a2b1-4c31c4ec6cd3",
+  "total_rows": 10,
+  "clean_rows": 10,
+  "quarantined_rows": 0,
+  "success_rate": 1.0,
+  "quarantine_rate": 0.0,
+  "rules_applied": 31,
+  "rules_fixed_count": 31,
+  "rules_fixed_percentage": 100.0,
+  "llm_calls_made": 0,
+  "llm_fixed_count": 0,
+  "llm_fixed_percentage": 0.0,
+  "llm_tokens_used": 0,
+  "llm_cost_estimate": 0.0,
+  "cache_hits": 0,
+  "cache_misses": 0,
+  "cache_hit_rate": null,
+  "phase_timings": {
+    "rules_duration_ms": 100,
+    "llm_duration_ms": 0,
+    "validation_duration_ms": 50
+  },
+  "total_duration_seconds": 0.15,
+  "errors_by_category": {
+    "validation_failures": 0,
+    "llm_contract_failures": 0,
+    "low_confidence_count": 0,
+    "edit_cap_exceeded_count": 0,
+    "parse_errors": 0
+  },
+  "errors_by_column": {},
+  "edit_caps": {},
+  "confidence_distribution": {}
+}

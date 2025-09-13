@@ -1,0 +1,23 @@
+{
+  "run_id": "e09ffb6b-745a-4f43-a2b1-4c31c4ec6cd3",
+  "created_at": "2025-09-13T16:16:10.356955",
+  "input_hash": "ad36e94960b007b7f7a71e95a8c59b3881f44c03f4340e3447d06266747f758c",
+  "schema_version": "1.0.0",
+  "model_version": "gpt-5",
+  "prompt_version": "v1",
+  "recipe_version": "v1",
+  "seed": 42,
+  "options": {
+    "use_inferred": false,
+    "dry_run": false,
+    "llm_columns": [
+      "Department",
+      "Account Name"
+    ],
+    "edit_cap_pct": 20,
+    "confidence_floor": 0.8,
+    "row_limit": 50000,
+    "batch_size": 15
+  },
+  "idempotency_key": "ad36e94960b007b7f7a71e95a8c59b3881f44c03f4340e3447d06266747f758c_1.0.0"
+}
