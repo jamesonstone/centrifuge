@@ -11,7 +11,7 @@ version: v1
 | 4 | Rules Engine | Idempotent transforms: alias→canonical, trim/case, typecast, ISO date, enum maps | 100% | 98% |
 | 5 | Residual Planner & Cache | Identify violations; batch unique values; lookup/write-through canonical mapping cache | 100% | 98% |
 | 6 | LLM Adapter (LiteLLM→gpt-5) | Contract-safe patches for `Department` and `Account Name` | 100% | 98% |
-| 7 | Apply & Audit | Apply patches with preconditions; emit per-change audit and diff | 0% | 98% |
+| 7 | Apply & Audit | Apply patches with preconditions; emit per-change audit and diff | 100% | 98% |
 | 8 | Validation-2 & Quarantine | Re-validate; categorize failures; write `errors.csv` | 0% | 98% |
 | 9 | Artifacts & Summary | Emit cleaned, errors, diff, audit, manifest, metrics, summary; index in DB | 0% | 98% |
 |10| API Surface | `POST /runs`, `GET /runs/{id}`, `GET /runs/{id}/artifacts` with OpenAPI | 0% | 98% |
