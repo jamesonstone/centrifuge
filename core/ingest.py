@@ -13,7 +13,8 @@ import structlog
 import uuid7
 from uuid import UUID
 
-from core.models import Schema, ColumnDefinition
+from core.models import Schema
+from core.schema_inference import SchemaInferencer, ExperimentalFeatures
 from core.config import settings
 
 logger = structlog.get_logger()
@@ -45,6 +46,7 @@ class CSVIngester:
         self.normalized_headers = []
         self.file_hash = None
         self.row_count = 0
+        self.experimental = ExperimentalFeatures()
         
     def compute_file_hash(self, content: bytes) -> str:
         """
@@ -551,3 +553,119 @@ class HeaderMapper:
         
         # Return original if no mapping found
         return header
+
+
+class DataIngestor:
+    """High-level data ingestor with experimental features support."""
+    
+    def __init__(self, schema: Optional[Schema] = None):
+        """
+        Initialize data ingestor.
+        
+        Args:
+            schema: Optional schema (can be inferred experimentally)
+        """
+        self.schema = schema
+        self.csv_ingester = CSVIngester(schema)
+        self.experimental = ExperimentalFeatures()
+        
+    def ingest_csv(
+        self,
+        file_path: str,
+        use_inferred: bool = False,
+        acknowledge_experimental: bool = False
+    ) -> Tuple[pd.DataFrame, str, Dict[str, str]]:
+        """
+        Ingest CSV file with optional schema inference.
+        
+        Args:
+            file_path: Path to CSV file
+            use_inferred: Enable experimental schema inference
+            acknowledge_experimental: Acknowledge experimental features
+            
+        Returns:
+            Tuple of (dataframe, file_hash, header_mapping)
+        """
+        if use_inferred:
+            if not acknowledge_experimental:
+                raise ValueError(
+                    "Must acknowledge experimental features with acknowledge_experimental=True"
+                )
+            
+            logger.warning("EXPERIMENTAL: Schema inference enabled")
+            self.experimental.enable_schema_inference()
+            
+            # Ingest without schema first
+            temp_ingester = CSVIngester()
+            df = temp_ingester.ingest(file_path)
+            
+            # Infer schema
+            inferencer = SchemaInferencer()
+            self.schema = inferencer.infer_schema(df, use_experimental=True)
+            
+            # Re-ingest with inferred schema
+            self.csv_ingester = CSVIngester(self.schema)
+            df = self.csv_ingester.ingest(file_path)
+            
+            logger.info("Experimental ingest complete",
+                       schema_version=self.schema.version,
+                       columns=len(self.schema.columns))
+        else:
+            # Standard ingestion
+            df = self.csv_ingester.ingest(file_path)
+        
+        # Build header mapping
+        header_mapping = {}
+        for orig, norm in zip(self.csv_ingester.headers, self.csv_ingester.normalized_headers):
+            if orig != norm:
+                header_mapping[orig] = norm
+        
+        return df, self.csv_ingester.file_hash, header_mapping
+    
+    def set_llm_columns(
+        self,
+        columns: List[str],
+        force: bool = False
+    ) -> None:
+        """
+        Set which columns can use LLM (experimental).
+        
+        Args:
+            columns: List of column names
+            force: Force even if not in allowed list
+        """
+        if not force:
+            allowed = ['department', 'account_name', 'category', 'type', 'status']
+            for col in columns:
+                if col.lower() not in allowed:
+                    raise ValueError(
+                        f"Column '{col}' not in allowed LLM columns. Use force=True to override."
+                    )
+        
+        self.experimental.set_llm_columns(columns)
+        logger.warning(f"EXPERIMENTAL: LLM enabled for columns: {columns}")
+    
+    def set_column_prompt_permission(
+        self,
+        column: str,
+        allow: bool
+    ) -> None:
+        """
+        Set whether column can be included in prompts (experimental).
+        
+        Args:
+            column: Column name
+            allow: Whether to allow in prompts
+        """
+        self.experimental.set_column_prompt_permission(column, allow)
+        
+        # Update schema if available
+        if self.schema:
+            for col_def in self.schema.columns:
+                if col_def.name == column or col_def.display_name == column:
+                    col_def.allow_in_prompt = allow
+                    break
+    
+    def get_experimental_config(self) -> Dict[str, Any]:
+        """Get current experimental configuration."""
+        return self.experimental.get_configuration()

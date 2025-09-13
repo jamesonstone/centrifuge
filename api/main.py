@@ -116,7 +116,9 @@ async def submit_run(
     schema_version: str = Form("1.0.0"),
     use_inferred: bool = Form(False),
     dry_run: bool = Form(False),
-    llm_columns: Optional[str] = Form(None)
+    llm_columns: Optional[str] = Form(None),
+    acknowledge_experimental: bool = Form(False),
+    force_llm_columns: bool = Form(False)
 ):
     """
     Submit a new data cleaning run.
@@ -189,12 +191,26 @@ async def submit_run(
                    url=s3_url,
                    hash=input_hash)
     
+    # Validate experimental features
+    if use_inferred and not acknowledge_experimental:
+        raise HTTPException(
+            status_code=400,
+            detail="Must acknowledge experimental features with acknowledge_experimental=true"
+        )
+    
     # Parse options
     options = {
         'use_inferred': use_inferred,
         'dry_run': dry_run,
-        'llm_columns': llm_columns.split(',') if llm_columns else ['department', 'account_name']
+        'llm_columns': llm_columns.split(',') if llm_columns else ['department', 'account_name'],
+        'acknowledge_experimental': acknowledge_experimental,
+        'force_llm_columns': force_llm_columns
     }
+    
+    # Log experimental features
+    if use_inferred:
+        logger.warning("EXPERIMENTAL: Schema inference requested",
+                      acknowledged=acknowledge_experimental)
     
     # Create run
     run_id = run_manager.create_run(

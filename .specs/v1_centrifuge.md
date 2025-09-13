@@ -17,7 +17,7 @@ version: v1
 |10| API Surface | `POST /runs`, `GET /runs/{id}`, `GET /runs/{id}/artifacts` with OpenAPI | 100% | 98% |
 |11| Tests | Golden, determinism, adversarial, property tests green in CI | 100% | 98% |
 |12| Docs & Ops Notes | README, prompts.md, ADR, runbook; reviewer can reproduce end-to-end | 100% | 98% |
-|13| Experimental Flags | `use_inferred=true`, `allow_in_prompt` plumbing; default off | 0% | 98% |
+|13| Experimental Flags | `use_inferred=true`, `allow_in_prompt` plumbing; default off | 100% | 98% |
 
 ---
 
