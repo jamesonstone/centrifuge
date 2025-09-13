@@ -1,0 +1,43 @@
+Transaction ID,Date,Account Code,Account Name,Description,Debit Amount,Credit Amount,Department,Reference Number,Created By
+TXN001,2024-01-15,1001,Cash,Cash receipt from customer,1500,,SALES,REF-2024-001,john.smith
+TXN002,01/16/2024,1200,Accounts Receivable,Invoice payment received,,1500,Sales,REF2024002,mary.jones
+TXN-003,2024/01/17,5001,Cost of Goods Sold,Purchase of inventory,850.75,,Operations,REF_2024_003,MIKE.WILSON
+TXN004,Jan 18 2024,2001,Accounts Payable,Supplier invoice,,850.75,OPS,REF-2024-004,sarah.davis
+TXN-005,2024-1-19,1001,Cash,Bank deposit,2250,,SALES,REF 2024 005,John.Smith
+TXN006,20/01/2024,6001,Office Supplies,Office supplies purchase,125.5,,Admin,REF_2024_006,lisa.brown
+TXN007,2024-01-21,2001,Accounts Payable,Payment to supplier,,125.5,ADMIN,REF2024007,Lisa.Brown
+TXN-0008,01-22-2024,4001,Sales Revenue,Product sales revenue,,3200,Sales,REF-2024-008,mary.jones
+TXN9,2024.01.23,1200,Accounts Receivable,Customer invoice,3200,,sales,REF_2024_009,MARY.JONES
+TXN-010,24/01/2024,7001,Rent Expense,Monthly office rent,2800,,Admin,REF-2024-010,david.taylor
+TXN11,2024-01-25,1001,Cash,Rent payment,,2800,ADMIN,REF2024011,David.Taylor
+TXN-012,"Jan 26, 2024",3001,Equipment,Computer purchase,1850,,IT,REF_2024_012,tech.support
+TXN013,2024/01/27,2001,Accounts Payable,Equipment invoice,,1850,IT,REF-2024-013,tech.support
+TXN-14,2024-1-28,8001,Utilities Expense,Electric bill payment,340.25,,Operations,REF 2024 014,mike.wilson
+TXN015,29-Jan-2024,1001,Cash,Utility payment,,340.25,operations,REF_2024_015,Mike.Wilson
+TXN-016,2024-01-30,9001,Professional Fees,Legal consultation fees,750,,ADMIN,REF-2024-016,sarah.davis
+TXN17,31/01/2024,2001,Accounts Payable,Legal fees invoice,,750,Admin,REF2024017,Sarah.Davis
+TXN-018,2024-02-01,1001,Cash,Customer payment received,1950,,Sales,REF_2024_018,john.smith
+TXN019,02/02/2024,1200,Accounts Receivable,Payment allocation,,1950,SALES,REF-2024-019,John.Smith
+TXN-20,2024/02/03,5002,Freight Expense,Shipping costs,85.3,,Operations,REF 2024 020,mike.wilson
+TXN021,2024-02-04,1001,Cash,Invalid chars: Deposit from μCustomer ∞ Løan!,5000,,Finance,REF-2024-021,financial.mgr
+,05-02-2024,N/A,Bank Fees,Monthly bank service charge,$25.00,,finance,,SYSTEM
+TXN-022,Feb 6 2024,4500,Interest Income,Bank interest earned,,12.5,Treasury,REF_2024_022,treasury@company.com
+TXN023,2024-02-07,0,Suspense Account,Unidentified payment - needs investigation!!!,999.99,,UNKNOWN,PENDING,Unknown User
+TXN-024a,08/02/2024,5100,Marketing Expense,Ad campaign - Q1 launch,-500,,MKT,REF2024024,mkt.team
+TXN025,9/2/24,2001,Accounts Payable,Marketing invoice,,500,Marketing,REF-2024-025,MKT.TEAM
+TXN 026,2024-02-10,6500,Travel & Entertainment,Client dinner expense (receipt attached),275.89,,Sales,REF 2024-026,sales.rep1
+duplicate,10/02/2024,6500,Travel & Entertainment,Client dinner expense (receipt attached),275.89,,Sales,REF 2024-026,sales.rep1
+TXN-027,02/11/2024,7500,Training Expense,Employee training program,"1,250.00",,HR,REF_2024_027,hr.manager
+TXN028,2024-02-12,2001,Accounts Payable,Training invoice payment,,1250,Human Resources,REF-2024-028,HR.Manager
+TXN-29,13/02/2024,8500,Insurance Expense,Quarterly insurance premium,3500,,Admin,INS-Q1-2024,admin.asst
+TXN030,2024-02-14,1001,Cash,Insurance payment,,"3,500.00",ADMIN,REF-2024-030,Admin.Asst
+TXN_031,15-Feb-2024,9500,Consulting Fees,IT consulting services - database optimization,2500,,Technology,CONS-2024-001,it.director
+TXN032,16/02/2024,2001,Accounts Payable,Consulting invoice,,2500,Tech,REF-2024-032,IT.Director
+TXN-033,NULL,1500,Petty Cash,Petty cash replenishment,200,,General,PETTY-001,office.mgr
+TXN034,18/2/2024,1001,Cash,Petty cash withdrawal,,200,General,REF-2024-034,Office.Mgr
+TXN035,2024.02.19,4001,Sales Revenue,Product sales - February batch,,8750.5,Sales,SALES-FEB-01,sales.mgr
+TXN-036,20-02-2024,1200,Accounts Receivable,Customer invoice - February sales,8750.5,,SALES,REF_2024_036,Sales.Mgr
+TXN037,21st Feb 2024,5200,Maintenance Expense,Equipment maintenance & repair,450.75,,Maintenance,MAINT-2024-002,facilities.tech
+TXN-038,22/02/2024,2001,Accounts Payable,Maintenance invoice payment,,450.75,Facilities,REF-2024-038,Facilities.Tech
+TXN039,23-2-24,6200,Communications,Phone & internet bill - February,$325.50,,Admin,COMM-FEB-2024,admin.clerk
+TXN-040,2024/02/24,1001,Cash,Communications payment,,325.5,,,

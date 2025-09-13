@@ -1,2 +1,3 @@
 # centrifuge
-🧹 Centrifuging Data into Cleaner, Grounded Sources. 
+
+🧹 Centrifuging Data into Cleaner, Grounded Sources.
