@@ -21,8 +21,8 @@ class LLMClient:
     def __init__(self,
                  base_url: str = None,  # Kept for backward compatibility but unused
                  api_key: str = None,
-                 model: str = "gpt-4",
-                 temperature: float = 0.1,
+                 model: str = "gpt-4o",  # Updated to gpt-4o for JSON mode support
+                 temperature: float = 0.0,  # Set to 0 for deterministic output
                  max_retries: int = 3):
         """
         Initialize LLM client.
@@ -36,13 +36,21 @@ class LLMClient:
         """
         # Note: base_url is ignored in direct library mode
         self.api_key = api_key or os.getenv('OPENAI_API_KEY')
-        self.model = model
-        self.temperature = temperature
+        # Allow environment variable to override model
+        self.model = os.getenv('LLM_MODEL_ID', model)
+        # Ensure temperature is 0 for deterministic output
+        self.temperature = float(os.getenv('LLM_TEMPERATURE', str(temperature)))
         self.max_retries = max_retries
+        
+        # Set seed for deterministic output
+        self.seed = int(os.getenv('LLM_SEED', '42'))
 
         # configure litellm
         if self.api_key:
             litellm.api_key = self.api_key
+            
+        # Set litellm to drop unsupported params gracefully
+        litellm.drop_params = True
 
         # check for api key in production
         if not self.api_key and not os.getenv('USE_MOCK_LLM', 'false').lower() == 'true':
@@ -61,12 +69,17 @@ class LLMClient:
         column = request.get('column')
         values = request.get('values', [])
         canonical_values = request.get('canonical_values', [])
+        
+        logger.debug(f"LLM Request: column='{column}', values_count={len(values)}")
 
         if not values:
+            logger.debug("No values to process, returning empty mappings")
             return {'success': True, 'mappings': {}}
 
         # check if we should use mock
-        if os.getenv('USE_MOCK_LLM', 'false').lower() == 'true' or not self.api_key:
+        use_mock = os.getenv('USE_MOCK_LLM', 'false').lower() == 'true'
+        if use_mock or not self.api_key:
+            logger.info(f"Using {'MOCK' if use_mock else 'MOCK (no API key)'} LLM for column '{column}'")
             return self._generate_mock_response(column, values, canonical_values)
 
         # prepare prompt
@@ -74,13 +87,19 @@ class LLMClient:
         user_prompt = self._get_user_prompt(column, values, canonical_values)
 
         # call llm with retry
+        logger.info(f"Calling real LLM API for column '{column}' (model: {self.model})")
         for attempt in range(self.max_retries):
             try:
+                logger.debug(f"  Attempt {attempt + 1}/{self.max_retries}")
                 response = await self._call_llm(system_prompt, user_prompt)
 
                 if response:
                     # parse and validate response
                     mappings = self._parse_llm_response(response, values, canonical_values)
+                    
+                    logger.info(f"  LLM returned {len(mappings)} mappings for column '{column}'")
+                    non_null = {k: v for k, v in mappings.items() if v is not None}
+                    logger.debug(f"  Non-null mappings: {len(non_null)}")
 
                     return {
                         'success': True,
@@ -90,13 +109,14 @@ class LLMClient:
                     }
 
             except Exception as e:
-                logger.error(f"LLM call attempt {attempt + 1} failed: {e}")
+                logger.warning(f"  LLM call attempt {attempt + 1} failed: {e}")
 
                 if attempt < self.max_retries - 1:
                     # exponential backoff
                     await asyncio.sleep(2 ** attempt)
 
         # all retries failed
+        logger.error(f"All LLM attempts failed for column '{column}'")
         return {
             'success': False,
             'error': 'LLM processing failed after retries',
@@ -120,27 +140,44 @@ class LLMClient:
                 {'role': 'system', 'content': system_prompt},
                 {'role': 'user', 'content': user_prompt}
             ]
+            
+            # Build kwargs based on model capabilities
+            kwargs = {
+                'model': self.model,
+                'messages': messages,
+                'temperature': self.temperature,
+                'api_key': self.api_key,
+                'seed': self.seed  # For deterministic output
+            }
+            
+            # Only add response_format for models that support it
+            if 'gpt-4o' in self.model or 'gpt-4-turbo' in self.model or 'gpt-3.5-turbo' in self.model:
+                kwargs['response_format'] = {'type': 'json_object'}
+            else:
+                # For older models, we'll request JSON in the prompt itself
+                logger.info(f"Model {self.model} may not support response_format, relying on prompt instructions")
 
             # make direct library call
-            response = await litellm.acompletion(
-                model=self.model,
-                messages=messages,
-                temperature=self.temperature,
-                response_format={'type': 'json_object'},
-                api_key=self.api_key
-            )
-
-            return response.choices[0].message.content
+            logger.debug(f"    Calling litellm with model={kwargs['model']}, temp={kwargs['temperature']}")
+            response = await litellm.acompletion(**kwargs)
+            
+            content = response.choices[0].message.content
+            logger.debug(f"    Response received: {len(content)} chars")
+            return content
 
         except Exception as e:
-            logger.error(f"LLM API error: {e}")
+            logger.debug(f"    LLM API error: {e}")
 
             # check for specific errors
             error_str = str(e).lower()
             if 'api key' in error_str or 'unauthorized' in error_str:
                 raise ValueError("Invalid API key")
-            elif 'rate limit' in error_str:
-                raise ValueError("Rate limit exceeded")
+            elif 'rate limit' in error_str or 'quota' in error_str:
+                raise ValueError("Rate limit exceeded or quota exhausted")
+            elif 'response_format' in error_str:
+                # Log and retry without response_format
+                logger.warning(f"Model {self.model} doesn't support response_format, retrying without it")
+                raise ValueError("Model doesn't support response_format")
             else:
                 raise ValueError(f"API error: {e}")
 
@@ -155,7 +192,8 @@ Canonical departments: Sales, Operations, Admin, IT, Finance, Marketing, HR, Leg
 For each value, determine if it can be mapped to a canonical department.
 If unclear or ambiguous, set mapped to null.
 
-Respond with a JSON object mapping each input value to its canonical value or null."""
+Always respond with valid JSON only. Return a JSON object mapping each input value to its canonical value or null.
+Do not include any text before or after the JSON object."""
 
         elif column == 'Account Name':
             return """You are an accounting expert specializing in chart of accounts standardization.
@@ -167,12 +205,14 @@ Cost of Goods Sold, Operating Expenses, Equipment, Inventory, Retained Earnings
 For each value, determine if it can be mapped to a canonical account.
 If unclear or requires investigation, set mapped to null.
 
-Respond with a JSON object mapping each input value to its canonical value or null."""
+Always respond with valid JSON only. Return a JSON object mapping each input value to its canonical value or null.
+Do not include any text before or after the JSON object."""
 
         else:
             return f"""You are a data standardization expert.
 Map the provided values to canonical values for the column '{column}'.
-Respond with a JSON object mapping each input value to its canonical value or null."""
+Always respond with valid JSON only. Return a JSON object mapping each input value to its canonical value or null.
+Do not include any text before or after the JSON object."""
 
     def _get_user_prompt(self, column: str, values: List[str], canonical_values: List[str]) -> str:
         """Get user prompt."""
@@ -187,8 +227,10 @@ Input values:
 Canonical values:
 {canonical_str}
 
-Return a JSON object where keys are input values and values are canonical mappings or null.
-Example: {{"Tech Support": "Support", "Unknown Dept": null}}"""
+Return ONLY a valid JSON object where keys are input values and values are canonical mappings or null.
+Example: {{"Tech Support": "Support", "Unknown Dept": null}}
+
+Remember: Output only the JSON object, no additional text."""
 
     def _parse_llm_response(self, response: str, values: List[str], canonical_values: List[str]) -> Dict[str, str]:
         """

@@ -242,6 +242,41 @@ class DatabasePool:
         async with self.acquire() as conn:
             await conn.execute(query, *values)
 
+    async def create_audit_events_batch(self, audit_events: List[Dict[str, Any]]) -> None:
+        """
+        Create audit events in batch for performance.
+
+        Args:
+            audit_events: List of audit event dictionaries
+        """
+        if not audit_events:
+            return
+
+        # Build batch insert query
+        query = """
+            INSERT INTO audit_log
+                (run_id, row_uuid, column_name, before_value, after_value,
+                 source, rule_id, reason, confidence)
+            VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9)
+        """
+
+        async with self.acquire() as conn:
+            # Use executemany for batch insert
+            await conn.executemany(query, [
+                (
+                    event.get('run_id'),
+                    event.get('row_uuid'),
+                    event.get('column_name'),
+                    event.get('before_value'),
+                    event.get('after_value'),
+                    event.get('source', 'rule'),
+                    event.get('rule_id'),
+                    event.get('reason'),
+                    event.get('confidence')
+                )
+                for event in audit_events
+            ])
+
 
 class RunManager:
     """

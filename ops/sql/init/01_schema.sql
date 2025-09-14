@@ -20,7 +20,7 @@ CREATE TYPE run_status AS ENUM ('queued', 'running', 'succeeded', 'partial', 'fa
 CREATE TYPE source_type AS ENUM ('rule', 'llm', 'human', 'cache');
 CREATE TYPE error_category AS ENUM (
     'validation_failure',
-    'llm_contract_failure', 
+    'llm_contract_failure',
     'low_confidence',
     'edit_cap_exceeded',
     'parse_error'
@@ -30,41 +30,41 @@ CREATE TYPE error_category AS ENUM (
 -- RUNS TABLE - Core run tracking
 -- =====================================================================
 CREATE TABLE runs (
-    run_id UUID PRIMARY KEY DEFAULT generate_uuidv7(),
+    id UUID PRIMARY KEY DEFAULT generate_uuidv7(),
     run_seq BIGSERIAL UNIQUE NOT NULL, -- human-friendly sequential ID
-    
+
     -- Core fields
-    state VARCHAR(20) NOT NULL DEFAULT 'queued',
-    input_hash VARCHAR(64) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'queued',
+    input_file_hash VARCHAR(64) NOT NULL,
     schema_version VARCHAR(50),
-    
+
     -- Options and config
     options JSONB NOT NULL DEFAULT '{}'::jsonb,
-    
+
     -- Worker management
-    claimed_by VARCHAR(50),
+    worker_id VARCHAR(50),
     started_at TIMESTAMPTZ,
     heartbeat_at TIMESTAMPTZ,
     completed_at TIMESTAMPTZ,
-    
+
     -- Progress and metrics
     phase_progress JSONB DEFAULT '{}'::jsonb,
     metrics JSONB DEFAULT '{}'::jsonb,
-    
+
     -- Error tracking
     error_message TEXT,
     error_code VARCHAR(50),
-    
+
     -- Metadata
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Indexes for runs
-CREATE INDEX idx_runs_status ON runs(state);
-CREATE INDEX idx_runs_worker ON runs(claimed_by, state);
+CREATE INDEX idx_runs_status ON runs(status);
+CREATE INDEX idx_runs_worker ON runs(worker_id, status);
 CREATE INDEX idx_runs_created ON runs(created_at DESC);
-CREATE INDEX idx_runs_heartbeat ON runs(heartbeat_at) WHERE state = 'running';
+CREATE INDEX idx_runs_heartbeat ON runs(heartbeat_at) WHERE status = 'running';
 
 -- =====================================================================
 -- SCHEMAS TABLE - Store schema definitions
@@ -73,16 +73,16 @@ CREATE TABLE schemas (
     id UUID PRIMARY KEY DEFAULT generate_uuidv7(),
     name VARCHAR(255) NOT NULL,
     version VARCHAR(50) NOT NULL,
-    
+
     -- Schema definition
     columns JSONB NOT NULL,
     constraints JSONB DEFAULT '{}'::jsonb,
     header_aliases JSONB DEFAULT '{}'::jsonb,
     domain_rules JSONB DEFAULT '{}'::jsonb,
-    
+
     -- Canonical values
     canonical_departments TEXT[] DEFAULT ARRAY[
-        'Sales', 'Operations', 'Admin', 'IT', 'Finance', 
+        'Sales', 'Operations', 'Admin', 'IT', 'Finance',
         'Marketing', 'HR', 'Legal', 'Engineering', 'Support'
     ],
     canonical_accounts TEXT[] DEFAULT ARRAY[
@@ -90,12 +90,12 @@ CREATE TABLE schemas (
         'Sales Revenue', 'Cost of Goods Sold', 'Operating Expenses',
         'Equipment', 'Inventory', 'Retained Earnings'
     ],
-    
+
     -- Metadata
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
-    
+
     UNIQUE(name, version)
 );
 
@@ -104,41 +104,41 @@ CREATE TABLE schemas (
 -- =====================================================================
 CREATE TABLE canonical_mappings (
     id UUID PRIMARY KEY DEFAULT generate_uuidv7(),
-    
+
     -- Mapping key
     column_name VARCHAR(100) NOT NULL,
     variant_value TEXT NOT NULL,
     canonical_value TEXT NOT NULL,
-    
+
     -- Versioning and source
     model_id VARCHAR(100) NOT NULL,
     prompt_version VARCHAR(50) NOT NULL,
     source source_type NOT NULL,
     confidence DECIMAL(3,2),
-    
+
     -- Approval tracking
     is_approved BOOLEAN DEFAULT FALSE,
     approved_by VARCHAR(100),
     approved_at TIMESTAMPTZ,
-    
+
     -- Usage stats
     use_count INTEGER DEFAULT 0,
     last_used_at TIMESTAMPTZ,
-    
+
     -- Metadata
     created_at TIMESTAMPTZ DEFAULT NOW(),
     superseded_at TIMESTAMPTZ,
     superseded_by UUID REFERENCES canonical_mappings(id),
-    
+
     -- Ensure uniqueness of active mappings
-    UNIQUE(column_name, variant_value, model_id, prompt_version) 
+    UNIQUE(column_name, variant_value, model_id, prompt_version)
         DEFERRABLE INITIALLY DEFERRED
 );
 
 -- Indexes for canonical_mappings
-CREATE INDEX idx_mappings_lookup ON canonical_mappings(column_name, variant_value) 
+CREATE INDEX idx_mappings_lookup ON canonical_mappings(column_name, variant_value)
     WHERE superseded_at IS NULL;
-CREATE INDEX idx_mappings_approved ON canonical_mappings(is_approved) 
+CREATE INDEX idx_mappings_approved ON canonical_mappings(is_approved)
     WHERE superseded_at IS NULL;
 
 -- =====================================================================
@@ -146,17 +146,17 @@ CREATE INDEX idx_mappings_approved ON canonical_mappings(is_approved)
 -- =====================================================================
 CREATE TABLE artifacts (
     id UUID PRIMARY KEY DEFAULT generate_uuidv7(),
-    run_id UUID NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
-    
+    run_id UUID NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+
     -- Artifact identification
     artifact_type VARCHAR(50) NOT NULL, -- cleaned, errors, diff, audit, manifest, metrics, summary
     file_name VARCHAR(255) NOT NULL,
-    
+
     -- Storage
     content_hash VARCHAR(64) NOT NULL, -- SHA256
     storage_path TEXT NOT NULL, -- MinIO path
     size_bytes BIGINT,
-    
+
     -- Metadata
     mime_type VARCHAR(100),
     row_count INTEGER,
@@ -173,21 +173,21 @@ CREATE INDEX idx_artifacts_type ON artifacts(run_id, artifact_type);
 -- =====================================================================
 CREATE TABLE audit_log (
     id UUID PRIMARY KEY DEFAULT generate_uuidv7(),
-    run_id UUID NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
-    
+    run_id UUID NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+
     -- Change details
     row_uuid UUID NOT NULL,
     column_name VARCHAR(100) NOT NULL,
     before_value TEXT,
     after_value TEXT,
-    
+
     -- Source and reasoning
     source source_type NOT NULL,
     rule_id VARCHAR(100),
     contract_id VARCHAR(100),
     reason TEXT,
     confidence DECIMAL(3,2),
-    
+
     -- Timing
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -203,32 +203,32 @@ CREATE INDEX idx_audit_source ON audit_log(source);
 CREATE TABLE metrics (
     id UUID PRIMARY KEY DEFAULT generate_uuidv7(),
     run_id UUID NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
-    
+
     -- Counts
     total_cells INTEGER,
     cells_validated INTEGER,
     cells_modified INTEGER,
     cells_quarantined INTEGER,
-    
+
     -- Performance
     rules_duration_ms INTEGER,
     llm_duration_ms INTEGER,
     total_duration_ms INTEGER,
-    
+
     -- LLM stats
     llm_calls_count INTEGER DEFAULT 0,
     llm_tokens_used INTEGER DEFAULT 0,
     llm_cost_estimate DECIMAL(10,4),
     cache_hits INTEGER DEFAULT 0,
     cache_misses INTEGER DEFAULT 0,
-    
+
     -- Error breakdown by category
     validation_failures INTEGER DEFAULT 0,
     llm_contract_failures INTEGER DEFAULT 0,
     low_confidence_count INTEGER DEFAULT 0,
     edit_cap_exceeded_count INTEGER DEFAULT 0,
     parse_errors INTEGER DEFAULT 0,
-    
+
     -- Metadata
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -246,16 +246,15 @@ RETURNS TABLE(run_id UUID, input_file_hash VARCHAR, options JSONB) AS $$
 BEGIN
     RETURN QUERY
     UPDATE runs
-    SET 
+    SET
         status = 'running',
         worker_id = p_worker_id,
-        claimed_at = NOW(),
         heartbeat_at = NOW(),
         started_at = NOW(),
         updated_at = NOW()
     WHERE id = (
-        SELECT id 
-        FROM runs 
+        SELECT id
+        FROM runs
         WHERE status = 'queued'
         ORDER BY created_at ASC
         LIMIT 1
@@ -272,7 +271,7 @@ BEGIN
     UPDATE runs
     SET heartbeat_at = NOW()
     WHERE id = p_run_id AND worker_id = p_worker_id AND status = 'running';
-    
+
     RETURN FOUND;
 END;
 $$ LANGUAGE plpgsql;
@@ -300,17 +299,17 @@ BEGIN
       AND superseded_at IS NULL
     ORDER BY created_at DESC
     LIMIT 1;
-    
+
     IF v_mapping_id IS NOT NULL THEN
         -- Update use count
         UPDATE canonical_mappings
         SET use_count = use_count + 1,
             last_used_at = NOW()
         WHERE id = v_mapping_id;
-        
+
         RETURN v_mapping_id;
     END IF;
-    
+
     -- Create new mapping
     INSERT INTO canonical_mappings (
         column_name, variant_value, canonical_value,
@@ -319,12 +318,12 @@ BEGIN
         p_column_name, p_variant_value, p_canonical_value,
         p_model_id, p_prompt_version, p_source, p_confidence
     )
-    ON CONFLICT (column_name, variant_value, model_id, prompt_version) 
+    ON CONFLICT (column_name, variant_value, model_id, prompt_version)
     DO UPDATE SET
         use_count = canonical_mappings.use_count + 1,
         last_used_at = NOW()
     RETURNING id INTO v_mapping_id;
-    
+
     RETURN v_mapping_id;
 END;
 $$ LANGUAGE plpgsql;

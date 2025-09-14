@@ -55,12 +55,12 @@ services:
       # Core infra
       DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/centrifuge"
       ARTIFACT_ENDPOINT: "http://minio:9000"
-      ARTIFACT_BUCKET: "artifacts"
+      ARTIFACT_BUCKET: "centrifuge"
       ARTIFACT_ACCESS_KEY: "minioadmin"
       ARTIFACT_SECRET_KEY: "minioadmin"
       ARTIFACT_REGION: "us-east-1"
       # LLM configuration (OPENAI_API_KEY loaded from .env)
-      LLM_MODEL_ID: "openai/gpt-5" # gpt-5 for PoC for "general purpose" but highly dependent on the type of data sets
+      LLM_MODEL_ID: "gpt-4o" # gpt-4o for JSON mode support and better performance
       LLM_TEMPERATURE: "0"
       LLM_SEED: "42"
       # Orchestrator defaults (read by app for validation and by workers during runs)
@@ -88,12 +88,12 @@ services:
     environment:
       DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/centrifuge"
       ARTIFACT_ENDPOINT: "http://minio:9000"
-      ARTIFACT_BUCKET: "artifacts"
+      ARTIFACT_BUCKET: "centrifuge"
       ARTIFACT_ACCESS_KEY: "minioadmin"
       ARTIFACT_SECRET_KEY: "minioadmin"
       ARTIFACT_REGION: "us-east-1"
       # LLM configuration (OPENAI_API_KEY loaded from .env)
-      LLM_MODEL_ID: "openai/gpt-5"
+      LITELLM_MODEL: "gpt-4o"
       LLM_TEMPERATURE: "0"
       LLM_SEED: "42"
       EDIT_CAP_PCT: "20"
@@ -118,12 +118,12 @@ services:
     environment:
       DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/centrifuge"
       ARTIFACT_ENDPOINT: "http://minio:9000"
-      ARTIFACT_BUCKET: "artifacts"
+      ARTIFACT_BUCKET: "centrifuge"
       ARTIFACT_ACCESS_KEY: "minioadmin"
       ARTIFACT_SECRET_KEY: "minioadmin"
       ARTIFACT_REGION: "us-east-1"
       # LLM configuration (OPENAI_API_KEY loaded from .env)
-      LLM_MODEL_ID: "openai/gpt-5"
+      LLM_MODEL_ID: "gpt-4o"
       LLM_TEMPERATURE: "0"
       LLM_SEED: "42"
       EDIT_CAP_PCT: "20"
@@ -187,8 +187,8 @@ services:
     entrypoint: >
       /bin/sh -c "
         mc alias set local http://minio:9000 minioadmin minioadmin &&
-        mc mb -p local/artifacts || true &&
-        mc policy set download local/artifacts || true
+        mc mb -p local/centrifuge || true &&
+        mc policy set download local/centrifuge || true
       "
 
   # ──────────────────────────────────────────────────────────────────────────────

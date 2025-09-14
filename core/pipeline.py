@@ -245,7 +245,7 @@ class DataPipeline:
                     db_audit_events.append({
                         'run_id': run_uuid,
                         'row_uuid': event.row_uuid,
-                        'source': 'rules',
+                        'source': 'rule',
                         'action': 'modify',
                         'column_name': event.column_name,
                         'before_value': event.before_value,
