@@ -515,7 +515,7 @@ class RuleEngine:
         return df
 
     def _apply_transaction_id_rules(self, df: pd.DataFrame, run_id: UUID) -> pd.DataFrame:
-        """Fix Transaction ID formatting issues."""
+        """Fix Transaction ID formatting issues with canonical hyphen format and zero-padding."""
         if 'Transaction ID' not in df.columns:
             return df
 
@@ -525,30 +525,54 @@ class RuleEngine:
                 original = str(value)
                 cleaned = original.strip().upper()
 
-                # Remove spaces within ID
+                # Remove internal spaces
                 cleaned = cleaned.replace(' ', '')
 
-                # Standardize prefix
-                if cleaned.startswith('TXN-'):
-                    cleaned = 'TXN' + cleaned[4:]
-                elif cleaned.startswith('TXN_'):
-                    cleaned = 'TXN' + cleaned[4:]
-
-                # Handle special cases
-                if cleaned.lower() == 'duplicate':
+                # Handle special cases first - leave sentinel tokens unchanged for validation
+                sentinel_tokens = {'DUPLICATE', 'INVALID', 'N/A', 'NULL', 'NA'}
+                if cleaned.upper() in sentinel_tokens:
                     # This will be caught in validation
-                    pass
-                elif not cleaned.startswith('TXN') and cleaned[0].isdigit():
-                    # Add TXN prefix if missing
-                    cleaned = 'TXN' + cleaned
+                    continue
 
-                if cleaned != original:
-                    self._record_change(
-                        df, idx, 'Transaction ID', original, cleaned, run_id,
-                        rule_id='transaction_id_format',
-                        reason='Standardized Transaction ID format'
-                    )
-                    df.at[idx, 'Transaction ID'] = cleaned
+                # Normalize prefix handling
+                if cleaned.startswith('TXN-') or cleaned.startswith('TXN_'):
+                    # Extract numeric part after prefix
+                    numeric_part = cleaned[4:]
+                elif cleaned.startswith('TXN'):
+                    # Extract numeric part after TXN
+                    numeric_part = cleaned[3:]
+                elif cleaned and cleaned[0].isdigit():
+                    # Add TXN prefix if missing for digit-starting values
+                    numeric_part = cleaned
+                else:
+                    # For non-digit starting values that don't have TXN prefix,
+                    # leave unchanged for validation to catch
+                    continue
+
+                # Extract contiguous digits from numeric part
+                digit_match = re.search(r'\d+', numeric_part)
+                if digit_match:
+                    digits = digit_match.group()
+
+                    # Apply zero-padding to minimum 3 digits, preserving existing leading zeros
+                    if len(digits) < 3:
+                        padded_digits = digits.zfill(3)
+                    else:
+                        padded_digits = digits  # Preserve existing leading zeros for ≥3 digits
+
+                    # Format with canonical hyphen
+                    formatted = f'TXN-{padded_digits}'
+
+                    if formatted != original:
+                        self._record_change(
+                            df, idx, 'Transaction ID', original, formatted, run_id,
+                            rule_id='transaction_id_format',
+                            reason='Standardized Transaction ID format'
+                        )
+                        df.at[idx, 'Transaction ID'] = formatted
+                else:
+                    # No contiguous digits found - leave unchanged for validation to quarantine
+                    continue
 
         return df
 

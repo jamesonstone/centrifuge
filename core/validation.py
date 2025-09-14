@@ -248,9 +248,27 @@ class Validator:
                         )
                         rows_to_quarantine.add(idx)
 
-        # Check Transaction ID uniqueness (if majority have it)
+        # Check Transaction ID format, sentinels, uniqueness (if majority have it)
         if 'Transaction ID' in working_df.columns:
             txn_id_check = self._validate_transaction_ids(working_df)
+
+            # Format validation errors
+            for idx in txn_id_check['format_invalid']:
+                row = working_df.loc[idx]
+                self.validation_errors.append(
+                    ValidationError(
+                        row_uuid=UUID(row['row_uuid']),
+                        row_number=row['row_number'],
+                        column_name='Transaction ID',
+                        value=row['Transaction ID'],
+                        error_type='transaction_id_format',
+                        message=f"Invalid Transaction ID format: '{row['Transaction ID']}'. Must be TXN-<digits>",
+                        category=ErrorCategory.VALIDATION_FAILURE
+                    )
+                )
+                rows_to_quarantine.add(idx)
+
+            # Missing Transaction ID errors
             for idx in txn_id_check['missing']:
                 row = working_df.loc[idx]
                 self.validation_errors.append(
@@ -265,6 +283,7 @@ class Validator:
                 )
                 rows_to_quarantine.add(idx)
 
+            # Duplicate Transaction ID errors
             for idx in txn_id_check['duplicates']:
                 row = working_df.loc[idx]
                 self.validation_errors.append(
@@ -363,25 +382,25 @@ class Validator:
                     import math
                     if math.isinf(value) or math.isnan(value):
                         return False
-                
+
                 # Remove commas, quotes, and currency symbols
                 clean_value = value_str.replace(',', '').replace('$', '').replace('"', '').strip()
-                
+
                 # Check for string representations of infinity/NaN
                 if clean_value.lower() in ['inf', '-inf', 'infinity', '-infinity', 'nan']:
                     return False
-                    
+
                 # Handle negative values in parentheses
                 if clean_value.startswith('(') and clean_value.endswith(')'):
                     clean_value = '-' + clean_value[1:-1]
-                    
+
                 # Try to parse as Decimal and check bounds
                 decimal_value = Decimal(clean_value)
-                
+
                 # Check for values that are too large (near float max)
                 if abs(decimal_value) > Decimal('1e308'):
                     return False
-                    
+
                 return True
             except (InvalidOperation, ValueError, AttributeError):
                 return False
@@ -482,7 +501,7 @@ class Validator:
 
     def _validate_transaction_ids(self, df: pd.DataFrame) -> Dict[str, Set[int]]:
         """
-        Validate Transaction ID constraints.
+        Validate Transaction ID constraints including format, sentinel tokens, and uniqueness.
 
         If majority of rows have Transaction ID, enforce uniqueness.
 
@@ -490,27 +509,57 @@ class Validator:
             df: DataFrame to validate
 
         Returns:
-            Dict with 'missing' and 'duplicates' sets of row indices
+            Dict with 'missing', 'duplicates', and 'format_invalid' sets of row indices
         """
-        result = {'missing': set(), 'duplicates': set()}
+        result = {'missing': set(), 'duplicates': set(), 'format_invalid': set()}
 
         if 'Transaction ID' not in df.columns:
             return result
 
-        # Count non-empty Transaction IDs
+        # Define sentinel tokens that should be treated as invalid
+        sentinel_tokens = {'DUPLICATE', 'INVALID', 'N/A', 'NULL', 'NA', ''}
+
+        # Canonical Transaction ID pattern: TXN-<digits>
+        canonical_pattern = re.compile(r'^TXN-\d+$')
+
         txn_ids = df['Transaction ID']
-        non_empty_count = txn_ids.notna().sum()
+
+        # First pass: identify format violations and sentinels
+        for idx, row in df.iterrows():
+            txn_id = row['Transaction ID']
+
+            if pd.isna(txn_id):
+                continue  # Will be handled by missing check below
+
+            txn_id_str = str(txn_id).strip().upper()
+
+            # Check for sentinel tokens
+            if txn_id_str in sentinel_tokens:
+                result['format_invalid'].add(idx)
+                continue
+
+            # Check for canonical format: TXN-<digits>
+            if not canonical_pattern.match(txn_id_str):
+                result['format_invalid'].add(idx)
+                continue
+
+        # Count non-empty, non-sentinel Transaction IDs
+        valid_txn_mask = txn_ids.notna() & ~txn_ids.index.isin(result['format_invalid'])
+        valid_count = valid_txn_mask.sum()
         total_count = len(df)
 
-        # If majority (>50%) have Transaction ID, enforce it
-        if non_empty_count > total_count / 2:
-            # Find missing
-            result['missing'] = set(df[txn_ids.isna()].index)
+        # If majority (>50%) have valid Transaction ID, enforce it for all
+        if valid_count > total_count / 2:
+            # Find missing (including sentinels and format violations)
+            all_invalid_indices = result['format_invalid'].union(set(df[txn_ids.isna()].index))
+            result['missing'] = all_invalid_indices
 
-            # Find duplicates
-            duplicated = df[txn_ids.notna()]['Transaction ID'].duplicated(keep=False)
-            duplicate_indices = df[txn_ids.notna()][duplicated].index
-            result['duplicates'] = set(duplicate_indices)
+            # Find duplicates among valid Transaction IDs only
+            valid_txn_ids = df[valid_txn_mask]['Transaction ID']
+            if len(valid_txn_ids) > 0:
+                duplicated = valid_txn_ids.duplicated(keep=False)
+                duplicate_indices = df[valid_txn_mask][duplicated].index
+                result['duplicates'] = set(duplicate_indices)
 
         return result
 

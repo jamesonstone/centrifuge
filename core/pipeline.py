@@ -4,6 +4,7 @@ Orchestrates the flow through all processing phases.
 """
 
 import os
+import io
 import logging
 import hashlib
 import json
@@ -39,6 +40,7 @@ class PipelineResult:
     audit_trail: List[Dict[str, Any]] = field(default_factory=list)
     metrics: Dict[str, Any] = field(default_factory=dict)
     quarantine_df: Any = None  # DataFrame of quarantined rows
+    input_file_path: Optional[str] = None  # Path to original input file
 
 
 class DataPipeline:
@@ -111,7 +113,8 @@ class DataPipeline:
             quarantined_rows=0,
             data=ingest_result['data'],
             errors=ingest_result.get('validation_errors', []),
-            metrics={'schema_version': schema_version}
+            metrics={'schema_version': schema_version},
+            input_file_path=file_path
         )
 
         logger.info(f"Ingested {result.total_rows} rows")
@@ -233,6 +236,30 @@ class DataPipeline:
                 'after': event.after_value
             })
 
+        # Save audit events to database if we have a cache (which has db access)
+        if self.cache and audit_events:
+            try:
+                # Convert audit events to the format expected by the database
+                db_audit_events = []
+                for event in audit_events:
+                    db_audit_events.append({
+                        'run_id': run_uuid,
+                        'row_uuid': event.row_uuid,
+                        'source': 'rules',
+                        'action': 'modify',
+                        'column_name': event.column_name,
+                        'before_value': event.before_value,
+                        'after_value': event.after_value,
+                        'confidence_score': 1.0,  # Rules have 100% confidence
+                        'contract_id': event.contract_id
+                    })
+
+                # Save to database
+                await self.cache.db.create_audit_events_batch(db_audit_events)
+                logger.info(f"Saved {len(db_audit_events)} audit events to database")
+            except Exception as e:
+                logger.warning(f"Failed to save audit events to database: {e}")
+
         # Count fixes
         fixed_count = len(patches)
 
@@ -246,7 +273,8 @@ class DataPipeline:
             data=transformed_df,
             errors=input_result.errors,
             audit_trail=audit_trail,
-            metrics=input_result.metrics
+            metrics=input_result.metrics,
+            input_file_path=input_result.input_file_path
         )
 
         result.metrics['rules_applied'] = fixed_count
@@ -380,7 +408,8 @@ class DataPipeline:
             data=input_result.data,
             errors=input_result.errors,
             audit_trail=input_result.audit_trail,
-            metrics=input_result.metrics
+            metrics=input_result.metrics,
+            input_file_path=input_result.input_file_path
         )
 
         # Count total residual items for logging
@@ -474,7 +503,8 @@ class DataPipeline:
             data=input_result.data,
             errors=input_result.errors,
             audit_trail=audit_trail,
-            metrics=input_result.metrics
+            metrics=input_result.metrics,
+            input_file_path=input_result.input_file_path
         )
 
         result.metrics['llm_processed'] = len(patches)
@@ -591,7 +621,8 @@ class DataPipeline:
             data=clean_df,
             errors=quarantine_rows,
             audit_trail=input_result.audit_trail,
-            metrics=input_result.metrics
+            metrics=input_result.metrics,
+            input_file_path=input_result.input_file_path
         )
 
         # Add validation statistics to metrics
@@ -775,6 +806,44 @@ class DataPipeline:
             audit_events = []
             diffs = []
 
+            # Store original input file as input.csv if available
+            if result.input_file_path and os.path.exists(result.input_file_path):
+                try:
+                    import shutil
+                    from core.config import settings
+                    # Copy input file to artifacts directory with standardized name
+                    input_storage_path = f"artifacts/{run_id}/input.csv"
+
+                    # Use storage backend to store the input file
+                    with open(result.input_file_path, 'rb') as f:
+                        input_content = f.read()
+
+                    # Calculate hash for the input file
+                    input_hash = hashlib.sha256(input_content).hexdigest()
+
+                    # Store in MinIO/storage backend
+                    if hasattr(self.storage, 'client'):  # MinIO client
+                        bucket_name = settings.MINIO_BUCKET  # Use same bucket as other artifacts
+                        self.storage.client.put_object(
+                            bucket_name,
+                            input_storage_path,
+                            io.BytesIO(input_content),
+                            len(input_content),
+                            content_type='text/csv'
+                        )
+
+                        artifacts['input.csv'] = {
+                            'storage_path': input_storage_path,
+                            'content_hash': input_hash,
+                            'size_bytes': len(input_content),
+                            'row_count': result.total_rows
+                        }
+
+                        logger.info(f"Stored input file as artifacts/{run_id}/input.csv")
+
+                except Exception as e:
+                    logger.warning(f"Failed to store input file: {e}")
+
             # Generate all artifacts
             artifact_metadata = await asyncio.to_thread(
                 artifact_mgr.generate_all_artifacts,
@@ -791,8 +860,8 @@ class DataPipeline:
             artifacts.update(artifact_metadata)
 
             # Register artifacts in database if artifact store is available
-            if self.artifact_store and artifact_metadata:
-                for artifact_name, artifact_info in artifact_metadata.items():
+            if self.artifact_store and artifacts:
+                for artifact_name, artifact_info in artifacts.items():
                     if isinstance(artifact_info, dict) and 'storage_path' in artifact_info:
                         # Register each artifact in the database
                         await self.artifact_store.register_artifact(

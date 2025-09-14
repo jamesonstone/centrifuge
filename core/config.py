@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # MinIO/S3
     artifact_endpoint: str = "http://localhost:9000"
-    artifact_bucket: str = "artifacts"
+    artifact_bucket: str = "centrifuge"
     artifact_access_key: str = "minioadmin"
     artifact_secret_key: str = "minioadmin"
     artifact_region: str = "us-east-1"

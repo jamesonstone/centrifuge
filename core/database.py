@@ -190,6 +190,58 @@ class DatabasePool:
         async with self.acquire() as conn:
             return await conn.fetch(query, *args)
 
+    async def create_metrics(self, run_id: str, metrics_data: Dict[str, Any]) -> None:
+        """
+        Create metrics record for a run using asyncpg.
+
+        Args:
+            run_id: Run ID
+            metrics_data: Dictionary containing metrics data
+        """
+        # Build insert query with available fields
+        fields = ["run_id"]
+        values = [run_id]
+        placeholders = ["$1"]
+
+        # Map metrics data to database columns (only include columns that exist in schema)
+        field_mapping = {
+            "total_cells": "total_cells",
+            "cells_validated": "cells_validated",
+            "cells_modified": "cells_modified",
+            "cells_quarantined": "cells_quarantined",
+            "rules_duration_ms": "rules_duration_ms",
+            "llm_duration_ms": "llm_duration_ms",
+            "total_duration_ms": "total_duration_ms",
+            "llm_calls_count": "llm_calls_count",
+            "llm_tokens_used": "llm_tokens_used",
+            "llm_cost_estimate": "llm_cost_estimate",
+            "cache_hits": "cache_hits",
+            "cache_misses": "cache_misses",
+            "validation_failures": "validation_failures",
+            "llm_contract_failures": "llm_contract_failures",
+            "low_confidence_count": "low_confidence_count",
+            "edit_cap_exceeded_count": "edit_cap_exceeded_count",
+            "parse_errors": "parse_errors"
+        }
+
+        # Add available metrics fields
+        placeholder_index = 2
+        for metrics_key, db_field in field_mapping.items():
+            if metrics_key in metrics_data:
+                fields.append(db_field)
+                values.append(metrics_data[metrics_key])
+                placeholders.append(f"${placeholder_index}")
+                placeholder_index += 1
+
+        # Create the insert query
+        query = f"""
+            INSERT INTO metrics ({', '.join(fields)})
+            VALUES ({', '.join(placeholders)})
+        """
+
+        async with self.acquire() as conn:
+            await conn.execute(query, *values)
+
 
 class RunManager:
     """
@@ -345,6 +397,14 @@ class RunManager:
             run_id,
             state
         )
+
+        # Save metrics to the metrics table if provided
+        if metrics:
+            try:
+                await self.db.create_metrics(run_id, metrics)
+                logger.info(f"Saved metrics for run {run_id}")
+            except Exception as e:
+                logger.warning(f"Failed to save metrics for run {run_id}: {e}")
 
         logger.info(f"Run {run_id} completed with state {state}")
 
