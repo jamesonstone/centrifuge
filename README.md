@@ -251,7 +251,6 @@ make db-status       # Check database status
 | Title | Description | Location | Last Updated |
 |---|---|---:|---|
 | [ARCHITECTURE](docs/ARCHITECTURE.md) | System architecture overview and component interactions | `docs/ARCHITECTURE.md` | 2025-09-14 |
-| [EMAIL](docs/EMAIL.md) | Candidate submission email template and notes | `docs/EMAIL.md` | 2025-09-14 |
 | [LLM_INTEGRATION](docs/LLM_INTEGRATION.md) | Notes on integrating LiteLLM, prompt design, and LLM contracts | `docs/LLM_INTEGRATION.md` | 2025-09-14 |
 | [LLM_OPERATION_FLOW](docs/LLM_OPERATION_FLOW.md) | Operational flow for LLM phases, telemetry, and retries | `docs/LLM_OPERATION_FLOW.md` | 2025-09-14 |
 | [NOTES](docs/NOTES.md) | Supplemental notes, rationale, and outstanding TODOs | `docs/NOTES.md` | 2025-09-14 |
