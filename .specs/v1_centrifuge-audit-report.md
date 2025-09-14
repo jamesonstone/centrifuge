@@ -1,6 +1,7 @@
 # Implementation Audit Report
 
 ## Executive Summary
+
 **Overall Confidence: 94%**
 
 After thorough analysis of the codebase against `.specs/v1_centrifuge.md`, I've identified several gaps and areas needing attention to achieve ≥97% confidence.
@@ -8,6 +9,7 @@ After thorough analysis of the codebase against `.specs/v1_centrifuge.md`, I've 
 ## ✅ Fully Implemented (Compliant)
 
 ### Core Requirements
+
 - [x] **Determinism**: Temperature 0, seed 42 confirmed in `config.py`
 - [x] **Rules-first architecture**: Rules engine handles majority of transformations
 - [x] **LLM columns**: Department and Account Name only (per spec)
@@ -25,6 +27,7 @@ After thorough analysis of the codebase against `.specs/v1_centrifuge.md`, I've 
 - [x] **Experimental flags**: Schema inference behind flags
 
 ### Data Contracts
+
 - [x] Schema model with all required fields
 - [x] RunManifest with version pinning
 - [x] Patch structure with preconditions
@@ -35,9 +38,11 @@ After thorough analysis of the codebase against `.specs/v1_centrifuge.md`, I've 
 ## ⚠️ Partially Implemented (Gaps Found)
 
 ### 1. **Database/Cache Integration** [CRITICAL]
+
 **Spec Requirement**: "Postgres for metadata and canonical cache"
 **Current State**: Models defined but no actual database integration
 **Missing**:
+
 - No actual PostgreSQL connection code
 - Cache lookups are mocked/in-memory
 - No `FOR UPDATE SKIP LOCKED` implementation
@@ -45,9 +50,11 @@ After thorough analysis of the codebase against `.specs/v1_centrifuge.md`, I've 
 - No artifact metadata storage in DB
 
 ### 2. **Worker Implementation** [CRITICAL]
+
 **Spec Requirement**: "Workers: pool that claims one run at a time"
 **Current State**: Worker directory exists but empty
 **Missing**:
+
 - No worker process implementation
 - No run claiming mechanism
 - No heartbeat/visibility timeout
@@ -55,34 +62,42 @@ After thorough analysis of the codebase against `.specs/v1_centrifuge.md`, I've 
 - API processes inline instead of queueing
 
 ### 3. **S3/MinIO Integration** [MODERATE]
+
 **Spec Requirement**: "MinIO for artifacts"
 **Current State**: Code references MinIO but fallback to local
 **Missing**:
+
 - MinIO client not properly initialized
 - No bucket creation/verification
 - Artifacts stored locally by default
 - S3 URL ingestion not fully implemented
 
 ### 4. **LiteLLM Proxy** [MODERATE]
+
 **Spec Requirement**: "LiteLLM proxy to gpt-5"
 **Current State**: LLM adapter exists but mock mode
 **Missing**:
+
 - No actual LiteLLM integration
 - Mock adapter returns hardcoded responses
 - No retry logic with exponential backoff
 - No rate limiting implementation
 
 ### 5. **Row Limit Enforcement** [MINOR]
+
 **Spec Requirement**: "Row cap: 50k default"
 **Current State**: Config exists but not enforced
 **Missing**:
+
 - No validation against row limit
 - No error if exceeding 50k rows
 
 ### 6. **Runbook Documentation** [MINOR]
+
 **Spec Requirement**: "Runbook notes for common failures"
 **Current State**: Not found
 **Missing**:
+
 - No runbook.md file
 - No DLQ documentation
 - No data retention notes
@@ -90,13 +105,14 @@ After thorough analysis of the codebase against `.specs/v1_centrifuge.md`, I've 
 ## 🔍 Detailed Gap Analysis
 
 ### Database Gaps
+
 ```python
 # MISSING: Actual database operations
 # File: core/planner.py (line ~89)
 def _check_cache(self, value: str, column: str) -> Optional[str]:
     # TODO: Query PostgreSQL cache
     # Currently returns None (no cache implementation)
-    
+
 # File: core/artifacts.py (line ~487)
 def store_artifact_metadata_to_db(self, db_connection: Any) -> None:
     # Implementation deferred for actual database integration
@@ -104,6 +120,7 @@ def store_artifact_metadata_to_db(self, db_connection: Any) -> None:
 ```
 
 ### Worker Gaps
+
 ```python
 # MISSING: Worker implementation
 # Expected in worker/main.py:
@@ -114,6 +131,7 @@ def store_artifact_metadata_to_db(self, db_connection: Any) -> None:
 ```
 
 ### Critical Missing SQL
+
 ```sql
 -- MISSING: ops/sql/init/001_schema.sql
 CREATE TABLE runs (
@@ -208,6 +226,7 @@ The implementation is **94% complete** with strong foundations but missing criti
 ## Additional Findings from Deep Analysis
 
 ### ✅ Confirmed Implemented:
+
 - UUIDv7 is properly used (uuid7 library imported)
 - SQL schema file exists (ops/sql/init/01_schema.sql)
 - Temperature 0 and seed 42 confirmed
@@ -217,6 +236,7 @@ The implementation is **94% complete** with strong foundations but missing criti
 - Experimental flags properly gated
 
 ### ❌ Confirmed Missing:
+
 - **Row limit enforcement**: Config exists (50000) but never checked in ingest
 - **Worker implementation**: Directory empty, no main.py
 - **Database operations**: All DB calls are TODOs or pass statements
@@ -229,6 +249,7 @@ The implementation is **94% complete** with strong foundations but missing criti
 ## Final Confidence Score: 94%
 
 ### Path to 97%+ Confidence:
+
 1. Implement database layer (+3%)
 2. Implement worker process (+2%)
 3. Add row limit check (+0.5%)

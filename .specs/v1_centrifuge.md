@@ -1,7 +1,9 @@
 # Centrifuge — Prompt Foundry Work Order (End-to-End Build Spec)
+
 version: v1
 
 ## Phase Table
+
 | # | Phase | Outcome | Progress | Confidence |
 |---|------|---------|----------|------------|
 | 0 | Repo & Infra Bootstrap | Local stack up via `docker-compose`; health endpoints respond | 100% | 98% |
@@ -22,11 +24,13 @@ version: v1
 ---
 
 ## Objective
+
 Deliver a trustworthy CSV cleaning PoC for a controller with an AI-skeptical boss. Prioritize determinism, auditability, and transparent outputs. Use rules-first transforms with tightly contracted LLM assists on specific columns only.
 
 ---
 
 ## Locked Business Rules & Constraints
+
 - **Tech stack:** Python 3.13; FastAPI; pandas; JSON-schema style validation with light custom validators; MinIO for artifacts; Postgres for metadata and canonical cache; LiteLLM proxy to **gpt-5**; `uv` package manager.
 - **LLM columns (PoC):** `Department`, `Account Name` only. All other columns are `rule_only`.
 - **PII exposure control:** `allow_in_prompt=false` for `Transaction ID`, `Account Code`, `Debit Amount`, `Credit Amount`, `Reference Number`, `Date`, `Description`, `Created By`. Only `Department` and `Account Name` are sent to LLM.
@@ -47,6 +51,7 @@ Deliver a trustworthy CSV cleaning PoC for a controller with an AI-skeptical bos
 ---
 
 ## Global Policies
+
 - **Determinism:** temperature 0; fixed seed 42; version pinning (model, prompt, schema, recipe); idempotency key = hash(input bytes + versions).
 - **Patch Preconditions:** each LLM patch specifies `before_value`; apply only if current cell equals `before_value`.
 - **Edit Caps & Confidence:** default 20% max edited rows per LLM column; minimum confidence 0.80; below floor → quarantine.
@@ -62,8 +67,10 @@ Deliver a trustworthy CSV cleaning PoC for a controller with an AI-skeptical bos
 ## Phase Details
 
 ### Phase 0 — Repo & Infra Bootstrap
+
 **Outcome:** Local environment starts with API, two workers, Postgres, MinIO, LiteLLM proxy.
 **Implementation Guidance:**
+
 - Define environment variables for DB and MinIO; store no secrets in VCS.
 - Database init via raw SQL in `ops/sql/init/` (auto-run by docker-entrypoint); note Alembic for production.
 - Health check `/healthz` returns 200 with fast DB ping (`SELECT 1`); skip MinIO/LiteLLM checks for PoC.
@@ -73,8 +80,10 @@ Deliver a trustworthy CSV cleaning PoC for a controller with an AI-skeptical bos
 ---
 
 ### Phase 1 — Data Contracts
+
 **Outcome:** Stable JSON definitions for: schema, run manifest, LLM patch, audit event, metrics, summary.
 **Implementation Guidance:**
+
 - **Schema** includes columns (types, nullability, enums, regex, `allow_in_prompt`, policy), constraints (PK, unique), header aliases, and domain rules.
 - **Manifest** pins versions, input hash, options, seed; capture model `gpt-5` and `prompt_version`.
 - **Patch** structure contains row identifier, column, before/after, reason, confidence, contract id.
@@ -86,8 +95,10 @@ Deliver a trustworthy CSV cleaning PoC for a controller with an AI-skeptical bos
 ---
 
 ### Phase 2 — Ingest & Profiling
+
 **Outcome:** Robust CSV intake with consistent header normalization and stable input hashing.
 **Implementation Guidance:**
+
 - Accept **multipart upload** and **`s3_url`**; stream large files.
 - Sniff delimiter and encoding; normalize headers using schema aliases.
 - Compute a content hash over raw bytes; store in manifest.
@@ -97,6 +108,7 @@ Deliver a trustworthy CSV cleaning PoC for a controller with an AI-skeptical bos
 ---
 
 ### Phase 3 — Validation-1
+
 **Outcome:** Deterministic detection of problems before any transformation.
 **Implementation Guidance:**
 - Check required columns present.
@@ -109,8 +121,10 @@ Deliver a trustworthy CSV cleaning PoC for a controller with an AI-skeptical bos
 ---
 
 ### Phase 4 — Rules Engine
+
 **Outcome:** Idempotent, deterministic cleanup that handles the majority of issues.
 **Implementation Guidance:**
+
 - Apply header alias→canonical mapping.
 - Trim whitespace; collapse internal whitespace where applicable; Title Case for categorical text.
 - Typecast numeric fields; non-castable values recorded as violations.
@@ -122,8 +136,10 @@ Deliver a trustworthy CSV cleaning PoC for a controller with an AI-skeptical bos
 ---
 
 ### Phase 5 — Residual Planner & Cache
+
 **Outcome:** Efficient, bounded set of items for LLM remediation with cache fast-path.
 **Implementation Guidance:**
+
 - Identify residual violations **only** for `Department` and `Account Name`.
 - Build batches by **unique values** rather than per row.
 - Look up canonical mapping cache in Postgres first; if hit, apply and log as `rule` source with `source=rule` or `source=cache` as preferred nomenclature.
@@ -133,8 +149,10 @@ Deliver a trustworthy CSV cleaning PoC for a controller with an AI-skeptical bos
 ---
 
 ### Phase 6 — LLM Adapter (LiteLLM→gpt-5)
+
 **Outcome:** Contract-safe patches produced for remaining unique values.
 **Implementation Guidance:**
+
 - Use LiteLLM proxy with temperature 0 and fixed seed.
 - Prompt with column context, allowed values (when enumerated), and examples sourced from schema or curated seed lists.
 - Require strict JSON structure; validate shape and types.
@@ -145,8 +163,10 @@ Deliver a trustworthy CSV cleaning PoC for a controller with an AI-skeptical bos
 ---
 
 ### Phase 7 — Apply & Audit
+
 **Outcome:** Patches applied safely; per-change logs generated.
 **Implementation Guidance:**
+
 - Apply patches only if `before_value` equals the current cell; otherwise discard with reason.
 - Emit one audit event per change including source (`llm`), contract id, reason, confidence.
 - Build `diff` entries for both rules-based and LLM-based edits; include the source and reason fields.
@@ -155,8 +175,10 @@ Deliver a trustworthy CSV cleaning PoC for a controller with an AI-skeptical bos
 ---
 
 ### Phase 8 — Validation-2 & Quarantine
+
 **Outcome:** Final compliance check; unsafe rows isolated for review.
 **Implementation Guidance:**
+
 - Re-run the same validations as Phase 3.
 - For rows still failing any rule, move to quarantine with a single primary category from the allowed set; collect detailed reasons.
 - Ensure quarantined rows keep all original context, including `Description`.
@@ -165,6 +187,7 @@ Deliver a trustworthy CSV cleaning PoC for a controller with an AI-skeptical bos
 ---
 
 ### Phase 9 — Artifacts & Summary
+
 **Outcome:** Complete artifact set persisted and indexed.
 **Implementation Guidance:**
 - Emit: `cleaned.csv`, `errors.csv`, `diff.csv`, `audit.ndjson`, `manifest.json`, `metrics.json`, `summary.md`.
@@ -175,6 +198,7 @@ Deliver a trustworthy CSV cleaning PoC for a controller with an AI-skeptical bos
 ---
 
 ### Phase 10 — API Surface
+
 **Outcome:** Minimal, durable endpoints for submission, status, and artifact access.
 **Implementation Guidance:**
 - `POST /runs` accepts multipart file and/or `s3_url`, plus options (`use_inferred`, `dry_run`, `llm_columns`).
@@ -186,6 +210,7 @@ Deliver a trustworthy CSV cleaning PoC for a controller with an AI-skeptical bos
 ---
 
 ### Phase 11 — Tests
+
 **Outcome:** Automated confidence in correctness and reproducibility.
 **Implementation Guidance:**
 - **Golden**: given a fixture CSV from sample_data.csv and schema, `cleaned.csv` and `diff.csv` match expected baselines.
@@ -198,6 +223,7 @@ Deliver a trustworthy CSV cleaning PoC for a controller with an AI-skeptical bos
 ---
 
 ### Phase 12 — Docs & Ops Notes
+
 **Outcome:** Clear artifacts for reviewers and operators.
 **Implementation Guidance:**
 - **README** with quickstart, environment setup (`uv`), compose usage, API examples, and production considerations (auth, tenancy, event bus, canaries, budgets).
@@ -210,6 +236,7 @@ Deliver a trustworthy CSV cleaning PoC for a controller with an AI-skeptical bos
 ---
 
 ### Phase 13 — Experimental Flags
+
 **Outcome:** Optional features available behind explicit opt-in.
 **Implementation Guidance:**
 - `use_inferred=true` enables light schema inference; require explicit flag and mark output manifest as `schema_version: inferred`.
@@ -220,6 +247,7 @@ Deliver a trustworthy CSV cleaning PoC for a controller with an AI-skeptical bos
 ---
 
 ## Role Split & Scaling Model
+
 - **API**: thin, stateless submission and read endpoints; no long work.
 - **Workers**: pool that claims one run at a time; executes ALL phases end-to-end; writes status, audit, and artifacts.
 - **Queueing**: DB-backed claim (`FOR UPDATE SKIP LOCKED`) for PoC; no phase sharding; Kafka/Redpanda noted as future enhancement.
@@ -229,6 +257,7 @@ Deliver a trustworthy CSV cleaning PoC for a controller with an AI-skeptical bos
 ---
 
 ## LLM Safety & Scope
+
 - Only `Department` and `Account Name` are LLM-enabled.
 - No LLM on numeric, date, ID, or PII-bearing columns.
 - Strict JSON contracts; bounded retries; low-confidence outputs quarantined.
@@ -237,6 +266,7 @@ Deliver a trustworthy CSV cleaning PoC for a controller with an AI-skeptical bos
 ---
 
 ## Non-Goals (PoC)
+
 - No semantic imputation from `Description` to fill missing IDs or codes.
 - No RAG/vector retrieval; any future retrieval must be version-pinned and audited.
 - No multi-tenant auth; documented as future work.
@@ -244,6 +274,7 @@ Deliver a trustworthy CSV cleaning PoC for a controller with an AI-skeptical bos
 ---
 
 ## Acceptance Criteria (System Level)
+
 - Identical inputs yield identical artifact hashes.
 - Every changed cell appears in the diff with source and reason.
 - All non-conforming rows are quarantined with categorized reasons.

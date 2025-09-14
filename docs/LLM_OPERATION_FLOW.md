@@ -1,11 +1,12 @@
 # LLM Operation Flow in Centrifuge Pipeline
 
 ## Overview
+
 This document details exactly where and how the LLM operates within the Centrifuge pipeline, with enhanced logging to track its activities.
 
 ## Pipeline Phases and LLM Involvement
 
-```
+```plaintext
 ┌─────────────────────────────────────────────────────────────┐
 │                    PIPELINE EXECUTION FLOW                    │
 ├─────────────────────────────────────────────────────────────┤
@@ -41,28 +42,34 @@ This document details exactly where and how the LLM operates within the Centrifu
 ## Detailed LLM Operation Points
 
 ### 1. Column Identification (Phase 3)
+
 **Location**: `core/pipeline.py::plan_residuals()`
 
 The system identifies which columns are eligible for LLM processing:
+
 - **Department**: `ColumnPolicy.LLM_ALLOWED`
 - **Account Name**: `ColumnPolicy.LLM_ALLOWED`
 
 All other columns have `ColumnPolicy.RULE_ONLY` and bypass LLM entirely.
 
 ### 2. Residual Item Collection (Phase 3)
+
 **Location**: `core/residual_planner.py::identify_residuals()`
 
 For LLM-eligible columns, the system:
+
 - Collects unique values that couldn't be fixed by rules
-- Applies edit cap (max 20% of rows can be edited)
-- Checks cache for previously mapped values
+- Applies edit cap (max 20% of rows can be edited) -- this is purposefully conservative for the PoC but can (and should) be expanded in production
+- Checks cache for previously mapped values -- this is just the postgres datastore but could be replaced with Redis or similar for speed at scale
 
 ### 3. LLM Processing (Phase 4)
+
 **Location**: `core/pipeline.py::process_llm()` → `core/llm_client.py::process()`
 
 The actual LLM operations occur here:
 
 #### 3.1 Request Preparation
+
 ```python
 request = {
     'column': 'Department',
@@ -72,12 +79,14 @@ request = {
 ```
 
 #### 3.2 LLM API Call
+
 - Uses LiteLLM library for OpenAI integration
 - Model: `gpt-4o` (supports JSON response format)
 - Temperature: `0.0` (deterministic)
 - Seed: `42` (reproducible)
 
 #### 3.3 Response Processing
+
 ```python
 response = {
     'success': True,
@@ -92,6 +101,7 @@ response = {
 ```
 
 #### 3.4 Data Updates
+
 - Applies mappings to DataFrame
 - Records changes in audit trail
 - Stores successful mappings in cache
@@ -100,7 +110,7 @@ response = {
 
 With the new logging enhancements, you'll see:
 
-```
+```plaintext
 ============================================================
 LLM PROCESSING PHASE STARTING
 ============================================================
@@ -159,6 +169,7 @@ LLM PROCESSING PHASE COMPLETE
 ## Log Locations
 
 ### Worker Logs
+
 ```bash
 # View worker logs with LLM details
 docker-compose logs -f centrifuge-worker-1 centrifuge-worker-2
@@ -168,6 +179,7 @@ docker-compose logs centrifuge-worker-1 | grep -E "LLM|llm"
 ```
 
 ### Log Levels
+
 - **INFO**: High-level LLM operations (phase start/end, totals)
 - **DEBUG**: Detailed operations (individual mappings, API calls)
 - **WARNING**: Failed attempts, retries
@@ -176,6 +188,7 @@ docker-compose logs centrifuge-worker-1 | grep -E "LLM|llm"
 ## Monitoring LLM Operations
 
 ### Key Metrics to Track
+
 1. **Residual Count**: How many values need LLM processing
 2. **Cache Hit Rate**: How often we avoid API calls
 3. **Success Rate**: Percentage of successful mappings
@@ -183,6 +196,7 @@ docker-compose logs centrifuge-worker-1 | grep -E "LLM|llm"
 5. **API Errors**: Rate limits, quota issues
 
 ### Sample Log Analysis
+
 ```bash
 # Count LLM operations per run
 docker-compose logs | grep "LLM PROCESSING PHASE COMPLETE" | tail -10
@@ -197,19 +211,25 @@ docker-compose logs | grep -E "quota|rate limit" | tail -10
 ## Troubleshooting
 
 ### No LLM Activity Visible
+
 Check if:
+
 1. Residual items exist: Look for "Identified X residual items"
 2. LLM columns have data: Department and Account Name columns
 3. Edit cap not exceeded: Max 20% of rows
 
 ### LLM Not Fixing Values
+
 Check if:
+
 1. API key is valid: `OPENAI_API_KEY` in .env
 2. Mock mode enabled: `USE_MOCK_LLM=true` bypasses real API
 3. Model compatibility: Using `gpt-4o` for JSON support
 
 ### Performance Issues
+
 Monitor:
+
 1. Batch sizes: Large value sets may timeout
 2. Retry attempts: Multiple failures indicate API issues
 3. Cache misses: High miss rate increases API calls
@@ -217,6 +237,7 @@ Monitor:
 ## Configuration
 
 ### Environment Variables
+
 ```bash
 # Core LLM settings
 LLM_MODEL_ID=gpt-4o          # Model to use
@@ -230,6 +251,7 @@ CONFIDENCE_FLOOR=0.80        # Minimum confidence
 ```
 
 ### Files Involved
+
 - `core/llm_client.py` - LLM API integration
 - `core/llm_processor.py` - Enhanced processing with logging
 - `core/pipeline.py` - Pipeline orchestration

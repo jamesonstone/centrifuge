@@ -1,8 +1,9 @@
-# LLM Prompts Documentation
+# LLM Integration and Prompt Documentation
 
 ## Overview
 
 Centrifuge uses tightly-contracted LLM prompts for specific data cleaning tasks. All LLM interactions are:
+
 - **Deterministic**: Temperature 0, fixed seed
 - **Contracted**: Strict JSON response format
 - **Bounded**: Edit caps and confidence thresholds
@@ -17,6 +18,7 @@ Centrifuge uses tightly-contracted LLM prompts for specific data cleaning tasks.
 **Purpose**: Map non-standard department names to canonical values
 
 **Contract**:
+
 ```json
 {
   "mappings": [
@@ -31,6 +33,7 @@ Centrifuge uses tightly-contracted LLM prompts for specific data cleaning tasks.
 ```
 
 **Canonical Values**:
+
 - Sales
 - Operations
 - Finance
@@ -40,6 +43,7 @@ Centrifuge uses tightly-contracted LLM prompts for specific data cleaning tasks.
 - Admin
 
 **Examples**:
+
 - "sales" → "Sales" (1.0 confidence)
 - "Ops" → "Operations" (0.95 confidence)
 - "IT Dept" → "IT" (0.98 confidence)
@@ -52,6 +56,7 @@ Centrifuge uses tightly-contracted LLM prompts for specific data cleaning tasks.
 **Purpose**: Standardize account names to canonical chart of accounts
 
 **Contract**:
+
 ```json
 {
   "mappings": [
@@ -66,6 +71,7 @@ Centrifuge uses tightly-contracted LLM prompts for specific data cleaning tasks.
 ```
 
 **Canonical Values**:
+
 - Cash
 - Accounts Receivable
 - Accounts Payable
@@ -84,6 +90,7 @@ Centrifuge uses tightly-contracted LLM prompts for specific data cleaning tasks.
 - Petty Cash
 
 **Examples**:
+
 - "A/R" → "Accounts Receivable" (0.95 confidence)
 - "cash on hand" → "Cash" (0.98 confidence)
 - "AP" → "Accounts Payable" (0.95 confidence)
@@ -91,6 +98,7 @@ Centrifuge uses tightly-contracted LLM prompts for specific data cleaning tasks.
 ## Configuration
 
 ### Model Settings
+
 - **Model**: gpt-5 (via LiteLLM proxy)
 - **Temperature**: 0.0 (deterministic)
 - **Seed**: 42 (reproducible)
@@ -98,16 +106,19 @@ Centrifuge uses tightly-contracted LLM prompts for specific data cleaning tasks.
 - **Top P**: 1.0
 
 ### Batching
+
 - **Batch Size**: 10-20 unique values per request
 - **Retry Strategy**: 3 attempts with exponential backoff
 - **Timeout**: 30 seconds per request
 
 ### Edit Caps
+
 - **Default**: 20% of rows per column
 - **Calculation**: `max_edits = total_rows * 0.20`
 - **Enforcement**: Stop processing when cap reached
 
 ### Confidence Thresholds
+
 - **Minimum**: 0.80
 - **Application**: Only apply mappings >= threshold
 - **Quarantine**: Low confidence mappings sent to quarantine
@@ -115,6 +126,7 @@ Centrifuge uses tightly-contracted LLM prompts for specific data cleaning tasks.
 ## Prompt Engineering Guidelines
 
 ### DO:
+
 - ✅ Provide clear context about the domain
 - ✅ Include examples of correct mappings
 - ✅ Specify the exact JSON structure required
@@ -122,6 +134,7 @@ Centrifuge uses tightly-contracted LLM prompts for specific data cleaning tasks.
 - ✅ List all canonical values explicitly
 
 ### DON'T:
+
 - ❌ Allow free-form text responses
 - ❌ Accept mappings without confidence scores
 - ❌ Process sensitive data (PII, financial amounts)
@@ -139,6 +152,7 @@ All LLM responses are validated for:
 5. **Completeness**: All requested mappings present
 
 Failed validations result in:
+
 - Retry with same input (up to 3 times)
 - Logging of contract violation
 - Fallback to quarantine if persistent failure
@@ -146,18 +160,21 @@ Failed validations result in:
 ## Security Considerations
 
 ### Input Sanitization
+
 - Escape special characters in values
 - Truncate extremely long strings
 - Remove control characters
 - Validate UTF-8 encoding
 
 ### Injection Prevention
+
 - No dynamic prompt construction
 - Fixed template structure
 - Parameterized value insertion
 - Output validation against whitelist
 
 ### Data Protection
+
 - No PII in prompts (names, IDs, etc.)
 - No financial amounts
 - No dates or timestamps
@@ -166,18 +183,21 @@ Failed validations result in:
 ## Monitoring & Metrics
 
 ### Success Metrics
+
 - Contract compliance rate
 - Average confidence score
 - Cache hit rate
 - Retry rate
 
 ### Failure Modes
+
 - Contract violations
 - Low confidence responses
 - Timeout errors
 - Rate limit exceeded
 
 ### Cost Tracking
+
 - Tokens per request
 - Requests per run
 - Cost per 1000 rows
@@ -186,6 +206,7 @@ Failed validations result in:
 ## Examples
 
 ### Successful Mapping
+
 ```json
 // Input
 ["sales", "OPERATIONS", "Fin", "IT Dept"]
@@ -222,6 +243,7 @@ Failed validations result in:
 ```
 
 ### Failed Mapping
+
 ```json
 // Input
 ["XYZ123", "!!!!", ""]
