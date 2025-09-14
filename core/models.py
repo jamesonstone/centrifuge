@@ -338,8 +338,8 @@ class Metrics(BaseModel):
     total_duration_ms: int
 
     # LLM stats
-    llm_calls_count: int = 0
-    llm_tokens_used: int = 0
+    llm_calls_count: Optional[int] = None
+    llm_tokens_used: Optional[int] = None
     llm_cost_estimate: Optional[Decimal] = None
     cache_hits: int = 0
     cache_misses: int = 0

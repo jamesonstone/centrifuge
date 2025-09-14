@@ -295,6 +295,10 @@ class TestGolden:
             cells_modified=len(patches),
             cells_quarantined=len(quarantine_df) * len(df.columns) if len(quarantine_df) > 0 else 0,
             rules_fixed_count=len(patches),
+            # LLM metrics: set to 0/None for golden test to match artifact formatting
+            llm_calls_count=0,
+            llm_tokens_used=0,
+            llm_cost_estimate=None,
             rules_duration_ms=100,
             llm_duration_ms=0,
             validation_duration_ms=50,

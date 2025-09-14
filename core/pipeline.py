@@ -850,8 +850,8 @@ class DataPipeline:
                 llm_duration_ms=500,
                 validation_duration_ms=300,
                 total_duration_ms=2000,
-                llm_calls_count=0,
-                llm_tokens_used=0,
+                llm_calls_count=None,
+                llm_tokens_used=None,
                 llm_cost_estimate=None,
                 cache_hits=0,
                 cache_misses=0
