@@ -64,7 +64,7 @@ services:
       LLM_TEMPERATURE: "0"
       LLM_SEED: "42"
       # Orchestrator defaults (read by app for validation and by workers during runs)
-      EDIT_CAP_PCT: "20"
+      EDIT_CAP_PCT: "30"
       CONFIDENCE_FLOOR: "0.80"
       PYTHONUNBUFFERED: "1"
     depends_on:
@@ -96,7 +96,7 @@ services:
       LITELLM_MODEL: "gpt-4o"
       LLM_TEMPERATURE: "0"
       LLM_SEED: "42"
-      EDIT_CAP_PCT: "20"
+      EDIT_CAP_PCT: "30"
       CONFIDENCE_FLOOR: "0.80"
       WORKER_ID: "worker-1"
       PYTHONUNBUFFERED: "1"
@@ -126,7 +126,7 @@ services:
       LLM_MODEL_ID: "gpt-4o"
       LLM_TEMPERATURE: "0"
       LLM_SEED: "42"
-      EDIT_CAP_PCT: "20"
+      EDIT_CAP_PCT: "30"
       CONFIDENCE_FLOOR: "0.80"
       WORKER_ID: "worker-2"
       PYTHONUNBUFFERED: "1"

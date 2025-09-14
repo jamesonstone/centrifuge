@@ -108,7 +108,7 @@ CREATE TABLE canonical_mappings (
     -- Mapping key
     column_name VARCHAR(100) NOT NULL,
     variant_value TEXT NOT NULL,
-    canonical_value TEXT NOT NULL,
+    canonical_value TEXT,  -- Allow NULL for unmappable values
 
     -- Versioning and source
     model_id VARCHAR(100) NOT NULL,
@@ -132,7 +132,6 @@ CREATE TABLE canonical_mappings (
 
     -- Ensure uniqueness of active mappings
     UNIQUE(column_name, variant_value, model_id, prompt_version)
-        DEFERRABLE INITIALLY DEFERRED
 );
 
 -- Indexes for canonical_mappings

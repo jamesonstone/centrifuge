@@ -398,7 +398,24 @@ class DataPipeline:
             llm_columns
         )
 
-        # update result
+        # Create LLM batches from residual items (planner has internal state)
+        llm_batches = planner.create_llm_batches()
+
+        # Convert batches to patches format expected by LLM phase
+        patches = []
+        for batch in llm_batches:
+            # Convert ResidualItem objects to the format expected by LLM
+            values = [item.value for item in batch.items]
+            canonical_options = batch.items[0].canonical_options if batch.items else []
+
+            patch = {
+                'column': batch.column_name,
+                'values': values,
+                'canonical_values': canonical_options
+            }
+            patches.append(patch)
+
+        logger.info(f"Created {len(patches)} LLM patches from residual items")        # update result
         result = PipelineResult(
             total_rows=input_result.total_rows,
             cleaned_rows=input_result.cleaned_rows,
@@ -418,6 +435,7 @@ class DataPipeline:
         result.metrics['residual_items'] = residual_items
         result.metrics['edit_caps'] = edit_caps
         result.metrics['cache_hits'] = cache_hits
+        result.metrics['residual_plan'] = {'patches': patches}  # Store patches for LLM phase
 
         logger.info(f"Identified {total_residuals} residual items, {cache_hits} cache hits")
 
@@ -445,11 +463,23 @@ class DataPipeline:
         plan = input_result.metrics.get('residual_plan', {})
         patches = plan.get('patches', [])
 
+        # Debug logging
+        logger.info(f"LLM processing debug - residual_plan keys: {list(plan.keys())}")
+        logger.info(f"LLM processing debug - patches count: {len(patches)}")
+
+        if len(patches) == 0:
+            logger.warning("No patches found in residual plan - LLM phase will be skipped")
+            logger.info(f"Full residual plan: {plan}")
+        else:
+            logger.info(f"Processing {len(patches)} patches with LLM")
+
         llm_fixed_count = 0
         audit_trail = input_result.audit_trail.copy()
 
         # process patches
-        for patch in patches:
+        for i, patch in enumerate(patches):
+            logger.info(f"Processing patch {i+1}/{len(patches)}: column='{patch.get('column')}', values_count={len(patch.get('values', []))}")
+
             try:
                 # prepare request
                 request = {
@@ -458,28 +488,53 @@ class DataPipeline:
                     'canonical_values': patch.get('canonical_values', [])
                 }
 
+                logger.info(f"LLM request for column '{patch['column']}': {len(request['values'])} values to process")
+                logger.debug(f"LLM input values: {request['values'][:5]}...")  # Log first 5 values
+
                 # call llm
                 response = await self.llm_adapter.process(request)
 
+                logger.info(f"LLM response for column '{patch['column']}': success={response.get('success') if response else False}")
+
+                if response:
+                    logger.debug(f"Full LLM response: {response}")
+
                 if response and response.get('success'):
                     mappings = response.get('mappings', {})
+                    logger.info(f"LLM returned {len(mappings)} mappings for column '{patch['column']}'")
 
                     # apply mappings
                     for value, canonical in mappings.items():
-                        # update data
-                        for row in input_result.data:
-                            if row.get(patch['column']) == value:
-                                row[patch['column']] = canonical
-                                llm_fixed_count += 1
+                        logger.debug(f"Applying mapping: '{value}' -> '{canonical}'")
+                        # update data - handle DataFrame iteration properly
+                        if hasattr(input_result.data, 'iterrows'):  # pandas DataFrame
+                            for index, row in input_result.data.iterrows():
+                                if row.get(patch['column']) == value:
+                                    input_result.data.at[index, patch['column']] = canonical
+                                    llm_fixed_count += 1
 
-                                audit_trail.append({
-                                    'row_id': row.get('row_id'),
-                                    'type': 'llm',
-                                    'column': patch['column'],
-                                    'before': value,
-                                    'after': canonical,
-                                    'confidence': response.get('confidence', 0.8)
-                                })
+                                    audit_trail.append({
+                                        'row_id': str(index),  # Use DataFrame index as row_id
+                                        'type': 'llm',
+                                        'column': patch['column'],
+                                        'before': value,
+                                        'after': canonical,
+                                        'confidence': response.get('confidence', 0.8)
+                                    })
+                        else:  # Assume list of dicts
+                            for row in input_result.data:
+                                if isinstance(row, dict) and row.get(patch['column']) == value:
+                                    row[patch['column']] = canonical
+                                    llm_fixed_count += 1
+
+                                    audit_trail.append({
+                                        'row_id': row.get('row_id'),
+                                        'type': 'llm',
+                                        'column': patch['column'],
+                                        'before': value,
+                                        'after': canonical,
+                                        'confidence': response.get('confidence', 0.8)
+                                    })
 
                         # store in cache if available
                         if self.cache and not dry_run:
@@ -490,8 +545,14 @@ class DataPipeline:
                                 confidence=response.get('confidence', 0.8)
                             )
 
+                else:
+                    logger.warning(f"LLM processing failed for column '{patch['column']}': {response}")
+
             except Exception as e:
-                logger.error(f"LLM processing error: {e}")
+                logger.error(f"LLM processing error for column '{patch.get('column', 'unknown')}': {e}")
+                logger.error(f"Error details: {repr(e)}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
 
         # update result
         result = PipelineResult(

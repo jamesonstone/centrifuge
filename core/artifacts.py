@@ -246,8 +246,8 @@ class ArtifactManager:
         success_rate = clean_rows / metrics.total_rows if metrics.total_rows > 0 else 0
         quarantine_rate = quarantined_rows / metrics.total_rows if metrics.total_rows > 0 else 0
 
-        rules_fixed_percentage = (metrics.rules_fixed_count / metrics.cells_modified * 100) if metrics.cells_modified > 0 else 0
-        llm_fixed_percentage = (metrics.llm_fixed_count / metrics.cells_modified * 100) if metrics.cells_modified > 0 else 0
+        rules_fixed_percentage = (metrics.rules_fixed_count / metrics.total_rows) if metrics.total_rows > 0 else 0
+        llm_fixed_percentage = (metrics.llm_fixed_count / metrics.total_rows) if metrics.total_rows > 0 else 0
 
         metrics_dict = {
             'run_id': str(metrics.run_id),
@@ -310,8 +310,8 @@ class ArtifactManager:
         success_rate = clean_rows / metrics.total_rows if metrics.total_rows > 0 else 0
         quarantine_rate = quarantined_rows / metrics.total_rows if metrics.total_rows > 0 else 0
 
-        rules_fixed_percentage = (metrics.rules_fixed_count / metrics.cells_modified * 100) if metrics.cells_modified > 0 else 0
-        llm_fixed_percentage = (metrics.llm_fixed_count / metrics.cells_modified * 100) if metrics.cells_modified > 0 else 0
+        rules_fixed_percentage = (metrics.rules_fixed_count / metrics.total_rows) if metrics.total_rows > 0 else 0
+        llm_fixed_percentage = (metrics.llm_fixed_count / metrics.total_rows) if metrics.total_rows > 0 else 0
         cache_hit_rate = metrics.cache_hit_ratio if metrics.cache_hit_ratio else 0
 
         # Calculate additional statistics
@@ -335,13 +335,13 @@ class ArtifactManager:
             f"### Rules Engine",
             f"- **Changes Applied:** {len(rules_changes):,}",
             f"- **Rows Fixed:** {metrics.rules_fixed_count:,}",
-            f"- **Fix Rate:** {rules_fixed_percentage:.1%}",
+            f"- **Row Impact Rate:** {rules_fixed_percentage:.1%}",
             "",
             f"### LLM Processing",
             f"- **API Calls:** {metrics.llm_calls_count:,}",
             f"- **Changes Applied:** {len(llm_changes):,}",
             f"- **Rows Fixed:** {metrics.llm_fixed_count:,}",
-            f"- **Fix Rate:** {llm_fixed_percentage:.1%}",
+            f"- **Row Impact Rate:** {llm_fixed_percentage:.1%}",
             f"- **Tokens Used:** {metrics.llm_tokens_used:,}" if metrics.llm_tokens_used else "- **Tokens Used:** N/A",
             f"- **Estimated Cost:** ${float(metrics.llm_cost_estimate):.2f}" if metrics.llm_cost_estimate else "- **Estimated Cost:** N/A",
             "",
@@ -409,8 +409,8 @@ class ArtifactManager:
         lines.extend([
             "## Summary",
             f"The pipeline successfully processed {success_rate:.1%} of input rows. "
-            f"Rules-based cleaning fixed {rules_fixed_percentage:.1%} of issues, "
-            f"while LLM processing handled {llm_fixed_percentage:.1%} of remaining problems. "
+            f"Rules-based cleaning affected {rules_fixed_percentage:.1%} of rows, "
+            f"while LLM processing affected {llm_fixed_percentage:.1%} of rows. "
         ])
 
         if quarantined_rows > 0:
